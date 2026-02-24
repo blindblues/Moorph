@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, query, where, getDocs, orderBy, addDoc, setDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
 
 // --- Admin Data Management ---
 const AdminData = {
@@ -28,15 +28,35 @@ const AdminData = {
     saveProjects(projects) {
         localStorage.setItem('moorph_projects', JSON.stringify(projects));
     },
+    async deleteProject(projectId) {
+        try {
+            await deleteDoc(doc(db, 'projects', projectId));
+        } catch (e) {
+            console.error('Errore durante l\'eliminazione da Firebase:', e);
+        }
+    },
+    async syncProjectToFirebase(project) {
+        try {
+            await setDoc(doc(db, 'projects', project.id), {
+                ...project,
+                updatedAt: new Date().toISOString()
+            });
+        } catch (e) {
+            console.error('Errore durante il sync con Firebase:', e);
+        }
+    },
     async getResults(projectId) {
         try {
             const q = query(
                 collection(db, 'results'),
-                where('projectId', '==', projectId),
-                orderBy('timestamp', 'desc')
+                where('projectId', '==', projectId)
             );
             const querySnapshot = await getDocs(q);
-            return querySnapshot.docs.map(doc => doc.data());
+            // Sort manually in JS to avoid Firestore Index requirement
+            console.log('Risultati recuperati con successo.');
+            return querySnapshot.docs
+                .map(doc => doc.data())
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         } catch (e) {
             console.error('Errore nel recupero dei risultati:', e);
             return [];
@@ -143,18 +163,19 @@ async function renderResults() {
 }
 
 // --- Actions ---
-window.removeImage = (idx) => {
+window.removeImage = async (idx) => {
     activeProject.images.splice(idx, 1);
-    updateActiveProject();
+    await updateActiveProject();
 };
 
-function updateActiveProject() {
-    const projects = AdminData.getProjects();
+async function updateActiveProject() {
+    const projects = await AdminData.getProjects();
     const idx = projects.findIndex(p => p.id === activeProject.id);
     projects[idx] = activeProject;
     AdminData.saveProjects(projects);
+    await AdminData.syncProjectToFirebase(activeProject);
     renderImages();
-    renderProjectList();
+    await renderProjectList();
 }
 
 function setupEventListeners() {
@@ -182,6 +203,7 @@ function setupEventListeners() {
         const projects = await AdminData.getProjects();
         projects.push(newProject);
         AdminData.saveProjects(projects);
+        await AdminData.syncProjectToFirebase(newProject);
 
         el.modalProject.classList.add('hidden');
         await renderProjectList();
@@ -190,9 +212,13 @@ function setupEventListeners() {
 
     document.getElementById('btn-delete-project').addEventListener('click', async () => {
         if (!confirm('Sei sicuro di voler eliminare questo progetto?')) return;
+
+        await AdminData.deleteProject(activeProject.id);
+
         const projects = await AdminData.getProjects();
         const filtered = projects.filter(p => p.id !== activeProject.id);
         AdminData.saveProjects(filtered);
+
         activeProject = null;
         el.projectDetail.classList.add('hidden');
         el.emptyState.classList.remove('hidden');
