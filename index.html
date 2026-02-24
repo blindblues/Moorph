@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Moorph | Scopri il tuo stile</title>
+  <meta name="description" content="Esprimi le tue preferenze e scopri lo stile che più ti appartiene." />
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+
+<body>
+  <div id="app">
+    <!-- Background Elements -->
+    <div class="bg-blobs">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+
+    <!-- Loading View -->
+    <div id="view-loading" class="view">
+      <div class="loader"></div>
+    </div>
+
+    <!-- Password View -->
+    <div id="view-password" class="view hidden">
+      <div class="glass-card login-box fade-in">
+        <div class="logo">Moorph</div>
+        <h1>Benvenuto</h1>
+        <p>Inserisci la password del progetto per iniziare.</p>
+        <div class="input-group">
+          <input type="password" id="project-password" placeholder="Password" autofocus />
+          <button id="btn-login" class="btn-primary">Accedi ora</button>
+        </div>
+        <p id="password-error" class="error-text hidden" style="color: var(--accent); font-size: 0.9rem;">Password non
+          valida. Riprova.</p>
+      </div>
+    </div>
+
+    <!-- Tutorial View -->
+    <div id="view-tutorial" class="view hidden">
+      <div class="modal-overlay">
+        <div class="tutorial-content glass-card fade-in">
+          <div class="tutorial-icon" style="font-size: 4rem; margin-bottom: 20px;">⚡</div>
+          <h2>Come funziona</h2>
+          <div class="tutorial-steps">
+            <div class="step">
+              <span>👉</span>
+              <p>Swipe a <b>Destra</b> se lo stile ti piace</p>
+            </div>
+            <div class="step">
+              <span>👈</span>
+              <p>Swipe a <b>Sinistra</b> se non fa per te</p>
+            </div>
+          </div>
+          <button id="btn-start" class="btn-primary" style="width: 100%;">Iniziamo!</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Swipe View -->
+    <div id="view-swipe" class="view hidden">
+      <header class="main-header">
+        <div class="logo">Moorph</div>
+        <div class="progress-container">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+      </header>
+
+      <main class="swipe-container">
+        <div id="card-deck" class="card-deck">
+          <!-- Cards injected by JS -->
+        </div>
+      </main>
+
+      <canvas id="swipe-particles" class="particles-canvas"></canvas>
+      <div id="aura-left" class="swipe-aura aura-left"></div>
+      <div id="aura-right" class="swipe-aura aura-right"></div>
+
+      <div id="indicator-like" class="swipe-indicator indicator-like">Like</div>
+      <div id="indicator-dislike" class="swipe-indicator indicator-dislike">Nope</div>
+
+      <footer class="swipe-footer">
+        <button id="ctrl-dislike" class="btn-round btn-nope" title="Non mi piace">✕</button>
+        <button id="ctrl-like" class="btn-round btn-love" title="Mi piace">♥</button>
+      </footer>
+    </div>
+
+    <!-- Success View -->
+    <div id="view-success" class="view hidden">
+      <div class="glass-card success-box fade-in">
+        <div class="success-icon" style="font-size: 4rem; margin-bottom: 20px;">✨</div>
+        <h1>Ottimo lavoro!</h1>
+        <p>Abbiamo salvato le tue preferenze.</p>
+        <p>Analizzeremo i tuoi gusti per creare qualcosa di unico.</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
