@@ -312,9 +312,17 @@ function setupEventListeners() {
             setTimeout(() => btn.innerText = originalText, 2000);
         } catch (err) {
             btn.innerText = originalText;
-            alert('Errore Firebase: Controlla le "Rules" su Firebase Console o la tua connessione.');
-            const data = btoa(JSON.stringify(activeProject));
-            navigator.clipboard.writeText(`${window.location.origin}/?d=${data}`);
+            const errMsg = err?.code || err?.message || String(err);
+            console.error('Errore generateShareLink:', errMsg);
+            // Generate a long URL as fallback and copy it anyway
+            const data = btoa(unescape(encodeURIComponent(JSON.stringify(activeProject))));
+            const fallbackUrl = `${window.location.origin}/?d=${data}`;
+            try {
+                await copyToClipboard(fallbackUrl);
+                alert(`Firebase non raggiungibile (${errMsg}).\n\nHai comunque un link lungo copiato nella clipboard — funziona ma è meno elegante.\n\nControlla le "Rules" di Firestore su Firebase Console per ottenere i link brevi.`);
+            } catch {
+                prompt('Firebase non disponibile. Copia manualmente il link:', fallbackUrl);
+            }
         }
     });
 
