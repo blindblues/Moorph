@@ -51,9 +51,21 @@
                                 style="font-family: monospace; color: var(--secondary);"></span></p>
                     </div>
                     <div class="project-actions">
-                        <button id="btn-copy-url" class="btn-small">🔗 Copia Link</button>
                         <button id="btn-delete-project" class="btn-danger">🗑 Elimina</button>
                     </div>
+                </div>
+
+                <!-- Share Link -->
+                <div class="glass-card" style="padding: 20px; background: rgba(255,255,255,0.01);">
+                    <label style="font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 10px;">🔗 Link di
+                        Condivisione</label>
+                    <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Tieni premuto per copiare
+                        su mobile</p>
+                    <input type="text" id="share-link-input" readonly
+                        style="width: 100%; font-family: monospace; font-size: 0.85rem; color: var(--secondary); cursor: text; user-select: all;"
+                        value="Seleziona progetto per generare il link" />
+                    <button id="btn-copy-url" class="btn-small" style="margin-top: 10px; width: 100%;">📋 Copia
+                        Link</button>
                 </div>
 
                 <!-- Password Config -->
@@ -64,7 +76,6 @@
                     <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                         <input type="text" id="edit-password" placeholder="Imposta password"
                             style="flex: 1; min-width: 180px;" />
-                        <p id="detail-url" class="project-url" style="flex: 1;"></p>
                     </div>
                 </div>
 

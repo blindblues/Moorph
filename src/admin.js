@@ -175,8 +175,11 @@ window.selectProject = async (id) => {
     document.getElementById('detail-name').innerText = activeProject.name;
     document.getElementById('detail-id').innerText = activeProject.id;
     document.getElementById('edit-password').value = activeProject.password || '';
-    document.getElementById('detail-url').innerText = `/?s=${activeProject.id}`;
     document.getElementById('image-count').innerText = `${activeProject.images.length} immagini`;
+
+    // Generate and show link immediately in the input field
+    const shortUrl = `${window.location.origin}/?s=${activeProject.id}`;
+    document.getElementById('share-link-input').value = shortUrl;
 
     renderImages();
     await renderResults();
@@ -303,26 +306,28 @@ function setupEventListeners() {
     document.getElementById('btn-copy-url').addEventListener('click', async () => {
         const btn = document.getElementById('btn-copy-url');
         const originalText = btn.innerText;
-        btn.innerText = '⏳ Generando...';
+        const input = document.getElementById('share-link-input');
+        const url = input.value;
+
+        // Select text in input so user sees what's copied
+        input.select();
+        input.setSelectionRange(0, 99999);
 
         try {
-            const url = await AdminData.generateShareLink(activeProject);
+            // Try to sync project to Firebase first (for short URL to work)
+            await AdminData.syncProjectToFirebase(activeProject);
+        } catch (e) {
+            console.warn('Firebase sync fallito, il link breve potrebbe non funzionare:', e);
+        }
+
+        try {
             await copyToClipboard(url);
             btn.innerText = '✅ Copiato!';
             setTimeout(() => btn.innerText = originalText, 2000);
-        } catch (err) {
-            btn.innerText = originalText;
-            const errMsg = err?.code || err?.message || String(err);
-            console.error('Errore generateShareLink:', errMsg);
-            // Generate a long URL as fallback and copy it anyway
-            const data = btoa(unescape(encodeURIComponent(JSON.stringify(activeProject))));
-            const fallbackUrl = `${window.location.origin}/?d=${data}`;
-            try {
-                await copyToClipboard(fallbackUrl);
-                alert(`Firebase non raggiungibile (${errMsg}).\n\nHai comunque un link lungo copiato nella clipboard — funziona ma è meno elegante.\n\nControlla le "Rules" di Firestore su Firebase Console per ottenere i link brevi.`);
-            } catch {
-                prompt('Firebase non disponibile. Copia manualmente il link:', fallbackUrl);
-            }
+        } catch {
+            // Input is still selected, user can copy manually
+            btn.innerText = '⚠️ Seleziona e copia manualmente';
+            setTimeout(() => btn.innerText = originalText, 3000);
         }
     });
 
