@@ -659,3 +659,77 @@ input:focus {
     padding: 20px;
   }
 }
+
+/* Mobile Swipe Optimization */
+@media (max-width: 480px) {
+  .main-header {
+    position: relative;
+    padding: 15px 10px;
+    gap: 8px;
+  }
+
+  .logo {
+    font-size: 1.4rem;
+  }
+
+  .progress-container {
+    width: 90%;
+    height: 4px;
+  }
+
+  .swipe-container {
+    padding: 5px;
+    flex: 1;
+    display: flex;
+    align-items: center;
+  }
+
+  .card-deck {
+    max-width: 90vw;
+    max-height: 55vh;
+    /* Limit height to prevent overlap with header/footer */
+  }
+
+  .swipe-footer {
+    padding-bottom: 20px;
+    gap: 15px;
+    margin-top: auto;
+    /* Push footer to bottom */
+  }
+
+  .btn-round {
+    width: 60px;
+    height: 60px;
+    font-size: 1.4rem;
+  }
+
+  .swipe-indicator {
+    font-size: 2.5rem;
+    padding: 10px 20px;
+    border-width: 6px;
+    top: 40%;
+  }
+
+  .indicator-like {
+    right: -1rem;
+  }
+
+  .indicator-dislike {
+    left: -1rem;
+  }
+
+  /* Reset some paddings for login/success boxes on mobile */
+  .login-box,
+  .success-box,
+  .tutorial-content {
+    padding: 30px 20px;
+  }
+
+  h1 {
+    font-size: 2rem;
+  }
+
+  p {
+    font-size: 1rem;
+  }
+}
