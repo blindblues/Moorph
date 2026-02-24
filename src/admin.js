@@ -1,5 +1,6 @@
-import { db } from './firebase';
-import { collection, query, where, getDocs, orderBy, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { db, storage } from './firebase';
+import { collection, query, where, getDocs, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- Admin Data Management ---
 const AdminData = {
@@ -275,18 +276,33 @@ function setupEventListeners() {
 
     document.getElementById('file-input').addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);
-        const toBase64 = file => new Promise((res, rej) => {
-            const reader = new FileReader();
-            reader.onload = () => res(reader.result);
-            reader.onerror = rej;
-            reader.readAsDataURL(file);
-        });
+        if (!files.length) return;
 
-        const encoded = await Promise.all(files.map(toBase64));
-        activeProject.images.push(...encoded);
-        await updateActiveProject();
-        // Reset so same file can be re-added
-        e.target.value = '';
+        const btn = document.getElementById('drop-zone');
+        btn.style.opacity = '0.5';
+        btn.style.pointerEvents = 'none';
+
+        try {
+            const uploadPromises = files.map(async (file) => {
+                // Create a unique path in Firebase Storage
+                const path = `projects/${activeProject.id}/${Date.now()}_${file.name}`;
+                const storageRef = ref(storage, path);
+                await uploadBytes(storageRef, file);
+                return getDownloadURL(storageRef);
+            });
+
+            const urls = await Promise.all(uploadPromises);
+            activeProject.images.push(...urls);
+            await updateActiveProject();
+
+        } catch (err) {
+            console.error('Errore upload:', err);
+            alert('Errore durante il caricamento. Controlla le Storage Rules su Firebase Console.');
+        } finally {
+            btn.style.opacity = '';
+            btn.style.pointerEvents = '';
+            e.target.value = '';
+        }
     });
 }
 
