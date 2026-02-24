@@ -1,5 +1,5 @@
 import gsap from 'gsap';
-import { Draggable } from 'gsap/Draggable';
+import { Draggable } from 'gsap/Draggable'; // Fixed case for Linux compatibility
 
 gsap.registerPlugin(Draggable);
 
