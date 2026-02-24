@@ -18,54 +18,67 @@
             <div class="blob blob-3"></div>
         </div>
 
-        <header class="admin-header glass-card"
-            style="border-radius: 0 0 24px 24px; margin: 0; width: 100%; border-top: none;">
+        <header class="admin-header glass-card">
             <div class="logo">Moorph Admin</div>
-            <button id="btn-create-project" class="btn-primary" style="padding: 10px 24px; font-size: 1rem;">+ Nuovo
-                Progetto</button>
+            <button id="btn-create-project" class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem;">
+                + Nuovo Progetto
+            </button>
         </header>
 
         <main class="admin-main">
-            <aside class="sidebar glass-card">
+            <!-- Sidebar: Project List -->
+            <aside id="admin-sidebar" class="sidebar glass-card">
                 <h2
-                    style="font-size: 1.4rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; margin-bottom: 20px;">
-                    I tuoi Progetti</h2>
+                    style="font-size: 1.3rem; font-weight: 700; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; margin-bottom: 15px;">
+                    I tuoi Progetti
+                </h2>
                 <ul id="project-list" class="project-list">
                     <!-- Projects injected by JS -->
                 </ul>
             </aside>
 
+            <!-- Detail Panel -->
             <section id="project-detail" class="project-detail glass-card hidden">
+                <!-- Back button (mobile only) -->
+                <button class="btn-back" id="btn-back">
+                    ← Torna ai Progetti
+                </button>
+
                 <div class="detail-header">
                     <div>
-                        <h1 id="detail-name" style="margin: 0; font-size: 2rem;">Nome Progetto</h1>
-                        <p id="detail-url" class="project-url" style="margin-top: 10px; display: inline-block;">URL del
-                            Progetto</p>
+                        <h1 id="detail-name" style="margin: 0; font-size: 1.8rem; font-weight: 800;">Nome Progetto</h1>
+                        <p style="margin-top: 6px; font-size: 0.85rem; color: var(--text-dim);">ID: <span id="detail-id"
+                                style="font-family: monospace; color: var(--secondary);"></span></p>
                     </div>
                     <div class="project-actions">
-                        <button id="btn-copy-url" class="btn-small">Copia Link</button>
-                        <button id="btn-delete-project" class="btn-danger">Elimina Progetto</button>
+                        <button id="btn-copy-url" class="btn-small">🔗 Copia Link</button>
+                        <button id="btn-delete-project" class="btn-danger">🗑 Elimina</button>
                     </div>
                 </div>
 
-                <div class="project-config glass-card" style="background: rgba(255,255,255,0.01);">
-                    <div class="config-item">
-                        <label style="font-weight: 600; color: white;">Password Accesso Utente</label>
-                        <input type="text" id="edit-password" placeholder="Imposta Password"
-                            style="width: 100%; max-width: 300px;" />
+                <!-- Password Config -->
+                <div class="glass-card" style="padding: 24px; background: rgba(255,255,255,0.01);">
+                    <label style="font-weight: 600; font-size: 0.95rem; display: block; margin-bottom: 12px;">
+                        🔑 Password Accesso Utente
+                    </label>
+                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="edit-password" placeholder="Imposta password"
+                            style="flex: 1; min-width: 180px;" />
+                        <p id="detail-url" class="project-url" style="flex: 1;"></p>
                     </div>
                 </div>
 
+                <!-- Image Management -->
                 <div class="image-management">
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h2 style="margin: 0;">Galleria Immagini</h2>
-                        <p id="image-count" style="font-size: 0.9rem;"></p>
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <h2 style="margin: 0; font-size: 1.3rem; font-weight: 700;">🖼 Galleria Immagini</h2>
+                        <p id="image-count" style="font-size: 0.85rem; color: var(--text-dim);"></p>
                     </div>
                     <div class="upload-area glass-card" id="drop-zone">
                         <div>
-                            <p style="color: white; font-weight: 600;">Trascina file o clicca qui</p>
-                            <p style="font-size: 0.8rem; margin-top: 5px;">Aggiungi le immagini per lo stile</p>
+                            <p style="color: white; font-weight: 600;">Trascina o clicca per caricare</p>
+                            <p style="font-size: 0.8rem; margin-top: 4px;">PNG, JPG, WEBP supportati</p>
                         </div>
                         <input type="file" id="file-input" multiple class="hidden" />
                     </div>
@@ -74,44 +87,49 @@
                     </div>
                 </div>
 
+                <!-- Results Section -->
                 <div class="results-section">
-                    <h2>Preferenze Raccolte</h2>
-                    <div id="results-summary" class="results-summary glass-card"
-                        style="background: rgba(131, 56, 236, 0.05);">
+                    <h2>📊 Preferenze Raccolte</h2>
+                    <div id="results-summary" class="glass-card"
+                        style="padding: 24px; background: rgba(131, 56, 236, 0.04);">
                         <p>Seleziona un progetto per vedere i risultati.</p>
                     </div>
                 </div>
             </section>
 
+            <!-- Empty State -->
             <section id="empty-state" class="empty-state">
-                <div class="glass-card" style="padding: 60px; text-align: center;">
+                <div class="glass-card" style="padding: 60px 40px; text-align: center; max-width: 500px;">
                     <div style="font-size: 4rem; margin-bottom: 20px;">🎨</div>
                     <h2>Benvenuto nell'Admin</h2>
-                    <p>Seleziona un progetto esistente o creane uno <br>nuovo per iniziare a caricare stili.</p>
+                    <p style="margin-top: 10px;">Seleziona un progetto esistente dalla lista<br>o creane uno nuovo per
+                        iniziare.</p>
                 </div>
             </section>
         </main>
 
         <!-- Create Project Modal -->
         <div id="modal-project" class="modal-overlay hidden">
-            <div class="glass-card modal-content fade-in" style="max-width: 400px; padding: 40px;">
-                <h2>Nuovo Progetto</h2>
+            <div class="glass-card modal-content fade-in" style="max-width: 420px; width: 100%; padding: 40px;">
+                <h2 style="margin-bottom: 5px;">Nuovo Progetto</h2>
+                <p style="font-size: 0.9rem; margin-bottom: 30px;">Crea un progetto di stile da condividere.</p>
                 <div class="input-group">
                     <div>
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Nome Progetto</label>
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Nome
+                            Progetto</label>
                         <input type="text" id="new-project-name" placeholder="es. Branding Studio XYZ"
                             style="width: 100%;" />
                     </div>
-                    <div style="margin-top: 20px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Password Utente</label>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Password
+                            Utente</label>
                         <input type="text" id="new-project-pass" placeholder="Password per l'utente"
                             style="width: 100%;" />
                     </div>
                 </div>
-                <div class="modal-actions"
-                    style="margin-top: 40px; display: flex; gap: 15px; justify-content: flex-end;">
+                <div style="margin-top: 30px; display: flex; gap: 12px; justify-content: flex-end;">
                     <button id="btn-cancel" class="btn-small" style="padding: 12px 24px;">Annulla</button>
-                    <button id="btn-save-project" class="btn-primary" style="padding: 12px 24px;">Salva e Crea</button>
+                    <button id="btn-save-project" class="btn-primary" style="padding: 12px 28px;">Crea Progetto</button>
                 </div>
             </div>
         </div>

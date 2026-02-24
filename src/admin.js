@@ -85,6 +85,7 @@ let activeProject = null;
 
 // --- DOM Elements ---
 const el = {
+    sidebar: document.getElementById('admin-sidebar'),
     projectList: document.getElementById('project-list'),
     projectDetail: document.getElementById('project-detail'),
     emptyState: document.getElementById('empty-state'),
@@ -116,11 +117,16 @@ window.selectProject = async (id) => {
     el.emptyState.classList.add('hidden');
     el.projectDetail.classList.remove('hidden');
 
-    document.getElementById('detail-name').innerText = activeProject.name;
-    document.getElementById('edit-password').value = activeProject.password;
+    // Mobile: hide sidebar, show detail
+    if (window.innerWidth <= 768) {
+        el.sidebar.classList.add('hidden-mobile');
+        el.projectDetail.classList.remove('hidden-mobile');
+    }
 
-    const shareUrl = AdminData.generateShareLink(activeProject);
-    document.getElementById('detail-url').innerText = `Link Pubblico: Pronto per la condivisione`;
+    document.getElementById('detail-name').innerText = activeProject.name;
+    document.getElementById('detail-id').innerText = activeProject.id;
+    document.getElementById('edit-password').value = activeProject.password;
+    document.getElementById('detail-url').innerText = `/${activeProject.id}`;
 
     renderImages();
     await renderResults();
@@ -140,22 +146,27 @@ async function renderResults() {
     const allSubmissions = await AdminData.getResults(activeProject.id);
 
     if (allSubmissions.length === 0) {
-        el.resultsSummary.innerHTML = '<p>Ancora nessun risultato per questo progetto.</p>';
+        el.resultsSummary.innerHTML = '<p style="color:var(--text-dim)">Ancora nessun risultato ricevuto.</p>';
         return;
     }
 
     el.resultsSummary.innerHTML = allSubmissions.map((submission, sIdx) => {
         const liked = submission.data.filter(r => r.liked);
-        const date = new Date(submission.timestamp).toLocaleString();
+        const date = new Date(submission.timestamp).toLocaleString('it-IT');
+        const notLiked = submission.data.length - liked.length;
 
         return `
-            <div class="result-card glass-card" style="margin-bottom: 20px; padding: 15px;">
-                <div class="stats" style="margin-bottom: 10px;">
-                    <p><b>Utente ${allSubmissions.length - sIdx}</b> - ${date}</p>
-                    <p><b>${liked.length}</b> Mi piace su ${submission.data.length} immagini</p>
+            <div class="result-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                    <strong>👤 Utente ${allSubmissions.length - sIdx}</strong>
+                    <span style="font-size:0.8rem; color:var(--text-dim);">${date}</span>
                 </div>
-                <div class="liked-gallery" style="display: flex; flex-wrap: wrap; gap: 5px;">
-                    ${liked.map(r => `<img src="${r.image}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" />`).join('')}
+                <div style="display:flex; gap:20px; margin-bottom:12px; flex-wrap:wrap;">
+                    <span style="color:#00ffa3;">✓ ${liked.length} Mi piace</span>
+                    <span style="color:#ff006e;">✗ ${notLiked} Non piace</span>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                    ${liked.map(r => `<img src="${r.image}" style="width:50px; height:50px; object-fit:cover; border-radius:10px; border:1px solid rgba(0,255,163,0.4);" />`).join('')}
                 </div>
             </div>
         `;
@@ -179,6 +190,16 @@ async function updateActiveProject() {
 }
 
 function setupEventListeners() {
+    // Mobile back button
+    document.getElementById('btn-back').addEventListener('click', () => {
+        el.projectDetail.classList.add('hidden');
+        el.projectDetail.classList.add('hidden-mobile');
+        el.sidebar.classList.remove('hidden-mobile');
+        el.emptyState.classList.remove('hidden');
+        activeProject = null;
+        renderProjectList();
+    });
+
     document.getElementById('btn-create-project').addEventListener('click', () => {
         el.modalProject.classList.remove('hidden');
     });
@@ -188,13 +209,13 @@ function setupEventListeners() {
     });
 
     document.getElementById('btn-save-project').addEventListener('click', async () => {
-        const name = document.getElementById('new-project-name').value;
-        const pass = document.getElementById('new-project-pass').value;
+        const name = document.getElementById('new-project-name').value.trim();
+        const pass = document.getElementById('new-project-pass').value.trim();
 
         if (!name || !pass) return alert('Inserisci nome e password');
 
         const newProject = {
-            id: Math.random().toString(36).substr(2, 6), // Solo 6 caratteri per l'ID
+            id: Math.random().toString(36).substr(2, 6),
             name,
             password: pass,
             images: []
@@ -205,6 +226,8 @@ function setupEventListeners() {
         AdminData.saveProjects(projects);
         await AdminData.syncProjectToFirebase(newProject);
 
+        document.getElementById('new-project-name').value = '';
+        document.getElementById('new-project-pass').value = '';
         el.modalProject.classList.add('hidden');
         await renderProjectList();
         await selectProject(newProject.id);
@@ -222,39 +245,48 @@ function setupEventListeners() {
         activeProject = null;
         el.projectDetail.classList.add('hidden');
         el.emptyState.classList.remove('hidden');
+        // Mobile: show sidebar again
+        el.sidebar.classList.remove('hidden-mobile');
         await renderProjectList();
     });
 
     document.getElementById('btn-copy-url').addEventListener('click', async () => {
         const btn = document.getElementById('btn-copy-url');
         const originalText = btn.innerText;
-        btn.innerText = 'Generando...';
+        btn.innerText = '⏳ Generando...';
 
         try {
             const url = await AdminData.generateShareLink(activeProject);
             navigator.clipboard.writeText(url);
-            btn.innerText = originalText;
-            alert('URL Ultra-Breve copiato!');
+            btn.innerText = '✅ Copiato!';
+            setTimeout(() => btn.innerText = originalText, 2000);
         } catch (err) {
             btn.innerText = originalText;
             alert('Errore Firebase: Controlla le "Rules" su Firebase Console o la tua connessione.');
-            // Fallback estremo se proprio Firestore è giù
             const data = btoa(JSON.stringify(activeProject));
             navigator.clipboard.writeText(`${window.location.origin}/?d=${data}`);
         }
     });
 
-    // Image Upload Mock
+    // Real file upload
     document.getElementById('drop-zone').addEventListener('click', () => {
-        // In a real app we'd trigger file input, here we'll just add some random images from Unsplash for the demo
-        const demoImages = [
-            'https://images.unsplash.com/photo-1549490349-8643362247b5?auto=format&fit=crop&w=800&q=80',
-            'https://images.unsplash.com/photo-1574169208507-84376144848b?auto=format&fit=crop&w=800&q=80',
-            'https://images.unsplash.com/photo-1618005198919-d3d4b5a92ead?auto=format&fit=crop&w=800&q=80',
-            'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=800&q=80'
-        ];
-        activeProject.images.push(...demoImages);
-        updateActiveProject();
+        document.getElementById('file-input').click();
+    });
+
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        const toBase64 = file => new Promise((res, rej) => {
+            const reader = new FileReader();
+            reader.onload = () => res(reader.result);
+            reader.onerror = rej;
+            reader.readAsDataURL(file);
+        });
+
+        const encoded = await Promise.all(files.map(toBase64));
+        activeProject.images.push(...encoded);
+        await updateActiveProject();
+        // Reset so same file can be re-added
+        e.target.value = '';
     });
 }
 
