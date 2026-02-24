@@ -232,8 +232,8 @@ p {
   position: relative;
   width: 100%;
   max-width: 380px;
-  aspect-ratio: 0.7;
-  /* 3:4.2 ish */
+  aspect-ratio: 0.65;
+  /* Taller card */
 }
 
 .tinder-card {
@@ -686,8 +686,8 @@ input:focus {
 
   .card-deck {
     max-width: 90vw;
-    max-height: 55vh;
-    /* Limit height to prevent overlap with header/footer */
+    max-height: 65vh;
+    /* Increased height limit */
   }
 
   .swipe-footer {
