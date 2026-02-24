@@ -395,6 +395,111 @@ function setupEventListeners() {
             e.target.value = '';
         }
     });
+
+    // Pinterest Import
+    document.getElementById('btn-pinterest-import').addEventListener('click', async () => {
+        const url = document.getElementById('pinterest-url').value.trim();
+        const status = document.getElementById('pinterest-status');
+        if (!url || !url.includes('pinterest.com')) {
+            status.style.color = '#ff6b6b';
+            status.innerText = 'Inserisci un URL valido di una bacheca Pinterest.';
+            return;
+        }
+        status.style.color = 'var(--text-dim)';
+        status.innerText = '⏳ Recupero immagini in corso...';
+        try {
+            const imgs = await fetchPinterestImages(url);
+            if (!imgs.length) {
+                status.style.color = '#ff6b6b';
+                status.innerText = 'Nessuna immagine trovata. La bacheca potrebbe essere privata o il formato non supportato.';
+                return;
+            }
+            status.style.color = '#00ffa3';
+            status.innerText = `✓ Trovate ${imgs.length} immagini. Seleziona quelle da aggiungere.`;
+            openPinterestModal(imgs);
+        } catch (e) {
+            status.style.color = '#ff6b6b';
+            status.innerText = `Errore: ${e.message}`;
+        }
+    });
+
+    // Pinterest modal: select-all / deselect-all / add
+    document.getElementById('btn-select-all').addEventListener('click', () => {
+        document.querySelectorAll('.pinterest-thumb').forEach(el => el.classList.add('selected'));
+        updatePinterestCount();
+    });
+    document.getElementById('btn-deselect-all').addEventListener('click', () => {
+        document.querySelectorAll('.pinterest-thumb').forEach(el => el.classList.remove('selected'));
+        updatePinterestCount();
+    });
+    document.getElementById('btn-add-pinterest').addEventListener('click', async () => {
+        const selected = [...document.querySelectorAll('.pinterest-thumb.selected')].map(el => el.dataset.url);
+        if (!selected.length) return alert('Seleziona almeno una immagine.');
+        document.getElementById('modal-pinterest').classList.add('hidden');
+        // Pinterest URLs (i.pinimg.com) can be stored directly — no base64 needed
+        activeProject.images.push(...selected);
+        await updateActiveProject();
+        document.getElementById('pinterest-status').innerText = `✓ Aggiunte ${selected.length} immagini da Pinterest.`;
+    });
 }
+
+// --- Pinterest Fetcher ---
+async function fetchPinterestImages(boardUrl) {
+    // Normalize URL
+    const normalized = boardUrl.replace(/\/?$/, '/');
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(normalized)}`;
+    const res = await fetch(proxyUrl);
+    if (!res.ok) throw new Error('Proxy non raggiungibile');
+    const data = await res.json();
+    const html = data.contents;
+
+    // Priority: extract 736x images (best quality available without auth)
+    const all = new Set();
+
+    // Try to grab 736x first
+    const matches736 = html.matchAll(/https:\/\/i\.pinimg\.com\/736x\/[a-z0-9\/]+\.jpg/g);
+    for (const m of matches736) all.add(m[0]);
+
+    // Fallback: originals
+    const matchesOrig = html.matchAll(/https:\/\/i\.pinimg\.com\/originals\/[a-z0-9\/]+\.jpg/g);
+    for (const m of matchesOrig) all.add(m[0]);
+
+    // Fallback: 564x
+    if (all.size < 4) {
+        const matches564 = html.matchAll(/https:\/\/i\.pinimg\.com\/564x\/[a-z0-9\/]+\.jpg/g);
+        for (const m of matches564) all.add(m[0]);
+    }
+
+    return [...all];
+}
+
+function openPinterestModal(images) {
+    const grid = document.getElementById('pinterest-grid');
+    grid.innerHTML = images.map(url => `
+        <div class="pinterest-thumb" data-url="${url}"
+            style="aspect-ratio:1; border-radius:12px; overflow:hidden; cursor:pointer; position:relative; border:3px solid transparent; transition:0.2s;"
+            onclick="this.classList.toggle('selected'); updatePinterestCount();">
+            <img src="${url}" style="width:100%; height:100%; object-fit:cover; pointer-events:none;" loading="lazy" />
+            <div style="position:absolute; inset:0; background:rgba(0,255,163,0.35); display:flex; align-items:center; justify-content:center; font-size:1.8rem; opacity:0; transition:0.2s;" class="check-overlay">✓</div>
+        </div>
+    `).join('');
+
+    // CSS for selected state via JS (simpler than stylesheet)
+    document.querySelectorAll('.pinterest-thumb').forEach(el => {
+        el.addEventListener('click', () => {
+            const overlay = el.querySelector('.check-overlay');
+            overlay.style.opacity = el.classList.contains('selected') ? '1' : '0';
+            el.style.borderColor = el.classList.contains('selected') ? '#00ffa3' : 'transparent';
+        });
+    });
+
+    updatePinterestCount();
+    document.getElementById('modal-pinterest').classList.remove('hidden');
+}
+
+window.updatePinterestCount = () => {
+    const n = document.querySelectorAll('.pinterest-thumb.selected').length;
+    document.getElementById('pinterest-selection-count').innerText = n > 0 ? `${n} selezionate` : '';
+};
 
 init();
