@@ -34,12 +34,12 @@ const AdminData = {
                 images: project.images,
                 updatedAt: new Date().toISOString()
             });
-            return `${window.location.origin}/index.html?s=${project.id}`;
+            return `${window.location.origin}/?s=${project.id}`;
         } catch (e) {
             console.error('Errore nel generare il link breve:', e);
             // Fallback to long link if Firebase fails
             const data = JSON.stringify(project);
-            return `${window.location.origin}/index.html?d=${btoa(data)}`;
+            return `${window.location.origin}/?d=${btoa(data)}`;
         }
     }
 };
