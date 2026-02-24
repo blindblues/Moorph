@@ -462,19 +462,18 @@ function setupEventListeners() {
 async function fetchPinterestImages(boardUrl) {
     const normalized = boardUrl.replace(/\/?$/, '/');
 
-    // Try multiple CORS proxies in order
     const proxies = [
         async (url) => {
-            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(8000) });
+            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(10000) });
             const d = await r.json();
             return d.contents;
         },
         async (url) => {
-            const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(8000) });
+            const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(10000) });
             return r.text();
         },
         async (url) => {
-            const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(8000) });
+            const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(10000) });
             return r.text();
         }
     ];
@@ -489,25 +488,32 @@ async function fetchPinterestImages(boardUrl) {
 
     if (!html) {
         const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-        if (isLocal) {
-            throw new Error('I proxy CORS non funzionano su localhost. Funzionerà sulla versione online del sito (Cloudflare).');
-        }
-        throw new Error('Tutti i proxy non disponibili. Riprova tra qualche secondo.');
+        throw new Error(isLocal
+            ? 'I proxy CORS non funzionano su localhost. Funzionerà sulla versione online (Cloudflare).'
+            : 'Tutti i proxy non disponibili. Riprova tra qualche secondo.');
     }
 
     // Unescape JSON-encoded backslashes: https:\/\/i.pinimg.com\/...
     const clean = html.replace(/\\\//g, '/');
 
-    const all = new Set();
-    const p736 = /https:\/\/i\.pinimg\.com\/736x\/[\w\/\-]+\.jpg/g;
-    const pOrig = /https:\/\/i\.pinimg\.com\/originals\/[\w\/\-]+\.jpg/g;
-    const p564 = /https:\/\/i\.pinimg\.com\/564x\/[\w\/\-]+\.jpg/g;
+    // Capture ALL size variants from the page
+    const allUrls = [...clean.matchAll(
+        /https:\/\/i\.pinimg\.com\/(?:736x|originals|564x|474x|236x)\/[\w\/\-]+\.jpg/g
+    )].map(m => m[0]);
 
-    for (const m of clean.matchAll(p736)) all.add(m[0]);
-    for (const m of clean.matchAll(pOrig)) all.add(m[0]);
-    if (all.size < 4) for (const m of clean.matchAll(p564)) all.add(m[0]);
+    // Deduplicate by image filename (hash) — keep highest resolution
+    const PRIORITY = { originals: 5, '736x': 4, '564x': 3, '474x': 2, '236x': 1 };
+    const bestByHash = new Map();
+    for (const url of allUrls) {
+        const filename = url.split('/').pop(); // e.g. "abcdef1234.jpg"
+        const size = url.match(/pinimg\.com\/([\w]+)\//)?.[1] || '';
+        const prio = PRIORITY[size] || 0;
+        if (!bestByHash.has(filename) || prio > bestByHash.get(filename).prio) {
+            bestByHash.set(filename, { url, prio });
+        }
+    }
 
-    return [...all];
+    return [...bestByHash.values()].map(v => v.url);
 }
 
 function openPinterestModal(images) {
