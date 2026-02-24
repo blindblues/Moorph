@@ -3,8 +3,27 @@ import { collection, query, where, getDocs, orderBy, addDoc, setDoc, doc } from 
 
 // --- Admin Data Management ---
 const AdminData = {
-    getProjects() {
-        return JSON.parse(localStorage.getItem('moorph_projects') || '[]');
+    async getProjects() {
+        // 1. Get from Local Storage for instant UI
+        const local = JSON.parse(localStorage.getItem('moorph_projects') || '[]');
+
+        try {
+            // 2. Fetch from Firebase to sync between devices
+            const querySnapshot = await getDocs(collection(db, 'projects'));
+            const remote = querySnapshot.docs.map(doc => doc.data());
+
+            // Merge: filter out duplicates based on ID
+            const merged = [...remote];
+            local.forEach(lp => {
+                if (!merged.find(rp => rp.id === lp.id)) merged.push(lp);
+            });
+
+            this.saveProjects(merged);
+            return merged;
+        } catch (e) {
+            console.error('Errore sync progetti:', e);
+            return local;
+        }
     },
     saveProjects(projects) {
         localStorage.setItem('moorph_projects', JSON.stringify(projects));
@@ -55,23 +74,23 @@ const el = {
 };
 
 // --- Initialization ---
-function init() {
-    renderProjectList();
+async function init() {
+    await renderProjectList();
     setupEventListeners();
 }
 
-function renderProjectList() {
-    const projects = AdminData.getProjects();
+async function renderProjectList() {
+    const projects = await AdminData.getProjects();
     el.projectList.innerHTML = projects.map(p => `
     <li class="project-item ${activeProject?.id === p.id ? 'active' : ''}" onclick="selectProject('${p.id}')">
-      <h3>${p.name}</h3>
-      <p>${p.images.length} immagini</p>
+      <h3>${p.name || 'Senza nome'}</h3>
+      <p>${(p.images || []).length} immagini • ID: ${p.id}</p>
     </li>
   `).join('');
 }
 
 window.selectProject = async (id) => {
-    const projects = AdminData.getProjects();
+    const projects = await AdminData.getProjects();
     activeProject = projects.find(p => p.id === id);
 
     el.emptyState.classList.add('hidden');
@@ -147,7 +166,7 @@ function setupEventListeners() {
         el.modalProject.classList.add('hidden');
     });
 
-    document.getElementById('btn-save-project').addEventListener('click', () => {
+    document.getElementById('btn-save-project').addEventListener('click', async () => {
         const name = document.getElementById('new-project-name').value;
         const pass = document.getElementById('new-project-pass').value;
 
@@ -160,24 +179,24 @@ function setupEventListeners() {
             images: []
         };
 
-        const projects = AdminData.getProjects();
+        const projects = await AdminData.getProjects();
         projects.push(newProject);
         AdminData.saveProjects(projects);
 
         el.modalProject.classList.add('hidden');
-        renderProjectList();
-        selectProject(newProject.id);
+        await renderProjectList();
+        await selectProject(newProject.id);
     });
 
-    document.getElementById('btn-delete-project').addEventListener('click', () => {
+    document.getElementById('btn-delete-project').addEventListener('click', async () => {
         if (!confirm('Sei sicuro di voler eliminare questo progetto?')) return;
-        const projects = AdminData.getProjects();
+        const projects = await AdminData.getProjects();
         const filtered = projects.filter(p => p.id !== activeProject.id);
         AdminData.saveProjects(filtered);
         activeProject = null;
         el.projectDetail.classList.add('hidden');
         el.emptyState.classList.remove('hidden');
-        renderProjectList();
+        await renderProjectList();
     });
 
     document.getElementById('btn-copy-url').addEventListener('click', async () => {

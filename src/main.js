@@ -365,8 +365,9 @@ function updateProgress() {
   document.getElementById('progress-bar').style.width = `${prog}%`;
 }
 
-function finishProject() {
-  DataManager.saveResult(state.currentProject.id, state.results);
+async function finishProject() {
+  // Add a small delay or loading state if needed, but for now just await
+  await DataManager.saveResult(state.currentProject.id, state.results);
   showView('success');
 }
 
