@@ -240,21 +240,40 @@ function renderCards() {
   const deck = document.getElementById('card-deck');
   deck.innerHTML = '';
 
-  // Render internal cards first (bottom up)
   const images = state.currentProject.images;
   images.forEach((img, idx) => {
     const card = document.createElement('div');
     card.className = 'tinder-card glass-card' + (idx > 0 ? ' bg-stack' : '');
     card.style.zIndex = images.length - idx;
-    card.innerHTML = `
-      <img src="${img}" class="card-image" />
-    `;
+    card.innerHTML = `<img src="${img}" class="card-image" />`;
+    // Tap to fullscreen (only the top card, and only if not dragging)
+    card.addEventListener('click', (e) => {
+      if (Math.abs(state.dragDistX || 0) < 10) openFullscreen(img);
+    });
     deck.appendChild(card);
     state.cards.push(card);
   });
 
   setupDraggable();
   updateProgress();
+}
+
+function openFullscreen(src) {
+  let lb = document.getElementById('fullscreen-overlay');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'fullscreen-overlay';
+    lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;padding:16px;cursor:zoom-out;';
+    lb.innerHTML = `
+      <img id="fullscreen-img" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;" />
+      <button onclick="document.getElementById('fullscreen-overlay').style.display='none'" style="position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.12);border:none;color:white;font-size:1.4rem;width:44px;height:44px;border-radius:50%;cursor:pointer;">✕</button>
+    `;
+    lb.addEventListener('click', () => lb.style.display = 'none');
+    lb.querySelector('img').addEventListener('click', e => e.stopPropagation());
+    document.body.appendChild(lb);
+  }
+  lb.querySelector('#fullscreen-img').src = src;
+  lb.style.display = 'flex';
 }
 
 function setupDraggable() {
@@ -271,6 +290,7 @@ function setupDraggable() {
     type: 'x,y',
     onDrag: function () {
       const x = this.x;
+      state.dragDistX = x; // Track drag so click handler can ignore drags
       const opacity = Math.min(Math.abs(x) / 100, 1);
 
       // Indicator Logic

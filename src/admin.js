@@ -188,12 +188,26 @@ window.selectProject = async (id) => {
 
 function renderImages() {
     el.imageGrid.innerHTML = activeProject.images.map((img, idx) => `
-    <div class="image-card">
-      <img src="${img}" />
-      <button class="remove-btn" onclick="removeImage(${idx})">×</button>
+    <div class="image-card" onclick="openLightbox('${img.replace(/'/g, "\\'")}')">
+      <img src="${img}" style="pointer-events:none;" />
+      <button class="remove-btn" onclick="event.stopPropagation(); removeImage(${idx})">×</button>
     </div>
   `).join('');
 }
+
+window.openLightbox = (src) => {
+    const overlay = document.getElementById('lightbox-overlay');
+    const img = document.getElementById('lightbox-img');
+    img.src = src;
+    overlay.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+};
+
+window.closeLightbox = () => {
+    document.getElementById('lightbox-overlay').classList.add('hidden');
+    document.getElementById('lightbox-img').src = '';
+    document.body.style.overflow = '';
+};
 
 async function renderResults() {
     const allSubmissions = await AdminData.getResults(activeProject.id);
