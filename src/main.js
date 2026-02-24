@@ -11,6 +11,19 @@ const DataManager = {
     const projects = JSON.parse(localStorage.getItem('moorph_projects') || '[]');
     return projects.find(p => p.id === id);
   },
+  // New: Fetch project from Firestore
+  async getProjectFromFirebase(id) {
+    try {
+      const projectDoc = await getDoc(doc(db, 'projects', id));
+      if (projectDoc.exists()) {
+        return projectDoc.data();
+      }
+      return null;
+    } catch (e) {
+      console.error('Errore nel recupero del progetto da Firebase:', e);
+      return null;
+    }
+  },
   // New: Decode project from URL
   decodeFromUrl(encodedData) {
     try {
@@ -141,11 +154,22 @@ async function init() {
   const params = new URLSearchParams(window.location.search);
   const projectId = params.get('p');
   const encodedProject = params.get('d');
+  const shortId = params.get('s');
 
   state.particles = new SwipeParticles();
 
+  // 1. Priority: Short Link from Firebase
+  if (shortId) {
+    const project = await DataManager.getProjectFromFirebase(shortId);
+    if (project) {
+      state.currentProject = project;
+      showView('password');
+      return;
+    }
+  }
+
+  // 2. Secondary: Load from URL (Encrypted/Encoded data)
   if (encodedProject) {
-    // 1. Priority: Load from URL (Encrypted/Encoded data)
     const project = DataManager.decodeFromUrl(encodedProject);
     if (project) {
       state.currentProject = project;
@@ -154,11 +178,10 @@ async function init() {
     }
   }
 
+  // 3. Last Resort: Demo or Local Storage
   if (!projectId) {
-    // Demo Mode if no project ID
     setupDemo();
   } else {
-    // 2. Fallback: Load from Local Storage (only for the creator)
     const project = DataManager.getProject(projectId);
     if (!project) {
       alert('Progetto non trovato');

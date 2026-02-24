@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, addDoc, setDoc, doc } from 'firebase/firestore';
 
 // --- Admin Data Management ---
 const AdminData = {
@@ -23,16 +23,24 @@ const AdminData = {
             return [];
         }
     },
-    // Generate a URL that contains all project data encoded
-    generateShareLink(project) {
-        const data = JSON.stringify({
-            id: project.id,
-            name: project.name,
-            password: project.password,
-            images: project.images
-        });
-        const encoded = btoa(data); // Simple base64 encoding
-        return `${window.location.origin}/index.html?d=${encoded}`;
+    // Generate a short URL by saving project data to Firestore
+    async generateShareLink(project) {
+        try {
+            // Save/Update project definition in Firestore
+            await setDoc(doc(db, 'projects', project.id), {
+                id: project.id,
+                name: project.name,
+                password: project.password,
+                images: project.images,
+                updatedAt: new Date().toISOString()
+            });
+            return `${window.location.origin}/index.html?s=${project.id}`;
+        } catch (e) {
+            console.error('Errore nel generare il link breve:', e);
+            // Fallback to long link if Firebase fails
+            const data = JSON.stringify(project);
+            return `${window.location.origin}/index.html?d=${btoa(data)}`;
+        }
     }
 };
 
@@ -174,10 +182,16 @@ function setupEventListeners() {
         renderProjectList();
     });
 
-    document.getElementById('btn-copy-url').addEventListener('click', () => {
-        const url = AdminData.generateShareLink(activeProject);
+    document.getElementById('btn-copy-url').addEventListener('click', async () => {
+        const btn = document.getElementById('btn-copy-url');
+        const originalText = btn.innerText;
+        btn.innerText = 'Generando...';
+
+        const url = await AdminData.generateShareLink(activeProject);
+
         navigator.clipboard.writeText(url);
-        alert('URL Pubblico copiato! Ora puoi inviarlo a chiunque, non ha bisogno di salvataggi locali.');
+        btn.innerText = originalText;
+        alert('URL Breve copiato! Ora puoi inviarlo a chiunque.');
     });
 
     // Image Upload Mock
