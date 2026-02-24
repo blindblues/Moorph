@@ -496,16 +496,24 @@ async function fetchPinterestImages(boardUrl) {
     // Unescape JSON-encoded backslashes: https:\/\/i.pinimg.com\/...
     const clean = html.replace(/\\\//g, '/');
 
-    // Capture ALL size variants from the page
-    const allUrls = [...clean.matchAll(
-        /https:\/\/i\.pinimg\.com\/(?:736x|originals|564x|474x|236x)\/[\w\/\-]+\.jpg/g
-    )].map(m => m[0]);
+    // --- Strategy 1: parse Pinterest's embedded JSON data ---
+    // Pinterest embeds pin data in <script type="application/json"> tags.
+    // Pin images always have { url, width, height } structure.
+    // Profile pics, icons, and sidebar suggestions don't have this triplet.
+    const jsonUrls = extractPinImagesFromJson(clean);
 
-    // Deduplicate by image filename (hash) — keep highest resolution
+    // --- Strategy 2: Regex fallback (less accurate) ---
+    let allUrls = jsonUrls.length >= 4 ? jsonUrls : [
+        ...clean.matchAll(
+            /https:\/\/i\.pinimg\.com\/(?:736x|originals|564x|474x)\/[\w\/\-]{10,}\.jpg/g
+        )
+    ].map(m => m[0]);
+
+    // --- Deduplicate by image filename — keep highest resolution ---
     const PRIORITY = { originals: 5, '736x': 4, '564x': 3, '474x': 2, '236x': 1 };
     const bestByHash = new Map();
     for (const url of allUrls) {
-        const filename = url.split('/').pop(); // e.g. "abcdef1234.jpg"
+        const filename = url.split('/').pop();
         const size = url.match(/pinimg\.com\/([\w]+)\//)?.[1] || '';
         const prio = PRIORITY[size] || 0;
         if (!bestByHash.has(filename) || prio > bestByHash.get(filename).prio) {
@@ -514,6 +522,47 @@ async function fetchPinterestImages(boardUrl) {
     }
 
     return [...bestByHash.values()].map(v => v.url);
+}
+
+// Recursively walk Pinterest's JSON to find pin image objects: {url, width, height}
+function extractPinImagesFromJson(html) {
+    const results = new Set();
+
+    // Pinterest uses several script tag IDs across versions
+    const scriptRegex = /<script[^>]+type="application\/json"[^>]*>([\s\S]*?)<\/script>/g;
+    let match;
+    while ((match = scriptRegex.exec(html)) !== null) {
+        try {
+            const data = JSON.parse(match[1]);
+            walkForPinImages(data, results);
+            if (results.size > 3) break; // Found actual pin data, stop
+        } catch { /* not valid JSON, skip */ }
+    }
+
+    return [...results];
+}
+
+function walkForPinImages(node, results) {
+    if (!node || typeof node !== 'object') return;
+
+    // Pin image objects have url (pinimg.com) + width + height
+    if (
+        typeof node.url === 'string' &&
+        node.url.includes('i.pinimg.com') &&
+        node.url.endsWith('.jpg') &&
+        typeof node.width === 'number' &&
+        typeof node.height === 'number' &&
+        node.width >= 236 // filter out tiny icons
+    ) {
+        results.add(node.url);
+        return;
+    }
+
+    if (Array.isArray(node)) {
+        for (const child of node) walkForPinImages(child, results);
+    } else {
+        for (const val of Object.values(node)) walkForPinImages(val, results);
+    }
 }
 
 function openPinterestModal(images) {
