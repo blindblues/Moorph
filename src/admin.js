@@ -1,6 +1,5 @@
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 // --- Admin Data Management ---
 const AdminData = {
@@ -38,12 +37,36 @@ const AdminData = {
     },
     async syncProjectToFirebase(project) {
         try {
+            // Store only metadata in the main doc (avoid 1MB limit)
+            const { images, ...meta } = project;
             await setDoc(doc(db, 'projects', project.id), {
-                ...project,
+                ...meta,
                 updatedAt: new Date().toISOString()
             });
+
+            // Store each image as its own document in a sub-collection
+            // First delete existing images sub-collection docs and re-add
+            const imagesRef = collection(db, 'projects', project.id, 'images');
+            // Add new images that don't exist yet (by checking data URL prefix)
+            for (let i = 0; i < images.length; i++) {
+                await setDoc(doc(db, 'projects', project.id, 'images', String(i)), {
+                    url: images[i],
+                    order: i
+                });
+            }
         } catch (e) {
             console.error('Errore durante il sync con Firebase:', e);
+        }
+    },
+    async getProjectImages(projectId) {
+        try {
+            const snap = await getDocs(collection(db, 'projects', projectId, 'images'));
+            return snap.docs
+                .map(d => ({ ...d.data(), id: d.id }))
+                .sort((a, b) => a.order - b.order)
+                .map(d => d.url);
+        } catch (e) {
+            return [];
         }
     },
     async getResults(projectId) {
@@ -106,7 +129,7 @@ async function renderProjectList() {
     el.projectList.innerHTML = projects.map(p => `
     <li class="project-item ${activeProject?.id === p.id ? 'active' : ''}" onclick="selectProject('${p.id}')">
       <h3>${p.name || 'Senza nome'}</h3>
-      <p>${(p.images || []).length} immagini • ID: ${p.id}</p>
+      <p>ID: ${p.id}</p>
     </li>
   `).join('');
 }
@@ -114,6 +137,10 @@ async function renderProjectList() {
 window.selectProject = async (id) => {
     const projects = await AdminData.getProjects();
     activeProject = projects.find(p => p.id === id);
+    if (!activeProject) return;
+
+    // Fetch images from sub-collection
+    activeProject.images = await AdminData.getProjectImages(id);
 
     el.emptyState.classList.add('hidden');
     el.projectDetail.classList.remove('hidden');
@@ -126,8 +153,9 @@ window.selectProject = async (id) => {
 
     document.getElementById('detail-name').innerText = activeProject.name;
     document.getElementById('detail-id').innerText = activeProject.id;
-    document.getElementById('edit-password').value = activeProject.password;
-    document.getElementById('detail-url').innerText = `/${activeProject.id}`;
+    document.getElementById('edit-password').value = activeProject.password || '';
+    document.getElementById('detail-url').innerText = `/?s=${activeProject.id}`;
+    document.getElementById('image-count').innerText = `${activeProject.images.length} immagini`;
 
     renderImages();
     await renderResults();
@@ -274,33 +302,48 @@ function setupEventListeners() {
         document.getElementById('file-input').click();
     });
 
+    // Compress image to keep Firestore docs small (free, no Storage needed)
+    function compressImage(file, maxSize = 800, quality = 0.5) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > maxSize || h > maxSize) {
+                    if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                    else { w = Math.round(w * maxSize / h); h = maxSize; }
+                }
+                canvas.width = w;
+                canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.src = url;
+        });
+    }
+
     document.getElementById('file-input').addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);
         if (!files.length) return;
 
-        const btn = document.getElementById('drop-zone');
-        btn.style.opacity = '0.5';
-        btn.style.pointerEvents = 'none';
+        const zone = document.getElementById('drop-zone');
+        zone.querySelector('p').innerText = `Compressione ${files.length} immagini...`;
+        zone.style.opacity = '0.5';
+        zone.style.pointerEvents = 'none';
 
         try {
-            const uploadPromises = files.map(async (file) => {
-                // Create a unique path in Firebase Storage
-                const path = `projects/${activeProject.id}/${Date.now()}_${file.name}`;
-                const storageRef = ref(storage, path);
-                await uploadBytes(storageRef, file);
-                return getDownloadURL(storageRef);
-            });
-
-            const urls = await Promise.all(uploadPromises);
-            activeProject.images.push(...urls);
+            const compressed = await Promise.all(files.map(f => compressImage(f)));
+            activeProject.images.push(...compressed);
             await updateActiveProject();
-
         } catch (err) {
             console.error('Errore upload:', err);
-            alert('Errore durante il caricamento. Controlla le Storage Rules su Firebase Console.');
+            alert('Errore durante la compressione delle immagini.');
         } finally {
-            btn.style.opacity = '';
-            btn.style.pointerEvents = '';
+            zone.querySelector('p').innerText = 'Trascina o clicca per caricare';
+            zone.style.opacity = '';
+            zone.style.pointerEvents = '';
             e.target.value = '';
         }
     });

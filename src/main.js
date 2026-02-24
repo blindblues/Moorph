@@ -1,7 +1,7 @@
 import gsap from 'gsap';
 import { Draggable } from 'gsap/Draggable';
 import { db } from './firebase';
-import { collection, addDoc, getDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, getDoc, getDocs, doc } from 'firebase/firestore';
 
 gsap.registerPlugin(Draggable);
 
@@ -11,14 +11,21 @@ const DataManager = {
     const projects = JSON.parse(localStorage.getItem('moorph_projects') || '[]');
     return projects.find(p => p.id === id);
   },
-  // New: Fetch project from Firestore
+  // Fetch project + images from Firestore sub-collection
   async getProjectFromFirebase(id) {
     try {
       const projectDoc = await getDoc(doc(db, 'projects', id));
-      if (projectDoc.exists()) {
-        return projectDoc.data();
-      }
-      return null;
+      if (!projectDoc.exists()) return null;
+      const project = projectDoc.data();
+
+      // Fetch images from sub-collection
+      const imagesSnap = await getDocs(collection(db, 'projects', id, 'images'));
+      const images = imagesSnap.docs
+        .map(d => ({ ...d.data() }))
+        .sort((a, b) => a.order - b.order)
+        .map(d => d.url);
+
+      return { ...project, images };
     } catch (e) {
       console.error('Errore nel recupero del progetto da Firebase:', e);
       return null;
