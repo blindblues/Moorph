@@ -445,29 +445,25 @@ function setupEventListeners() {
 
 // --- Pinterest Fetcher ---
 async function fetchPinterestImages(boardUrl) {
-    // Normalize URL
     const normalized = boardUrl.replace(/\/?$/, '/');
     const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(normalized)}`;
     const res = await fetch(proxyUrl);
     if (!res.ok) throw new Error('Proxy non raggiungibile');
     const data = await res.json();
-    const html = data.contents;
 
-    // Priority: extract 736x images (best quality available without auth)
+    // Pinterest HTML has JSON-escaped URLs: https:\/\/i.pinimg.com\/...
+    // Unescape backslashes so the regex can match them
+    const html = data.contents.replace(/\\\//g, '/');
+
     const all = new Set();
+    const pattern736 = /https:\/\/i\.pinimg\.com\/736x\/[\w\/\-]+\.jpg/g;
+    const patternOrig = /https:\/\/i\.pinimg\.com\/originals\/[\w\/\-]+\.jpg/g;
+    const pattern564 = /https:\/\/i\.pinimg\.com\/564x\/[\w\/\-]+\.jpg/g;
 
-    // Try to grab 736x first
-    const matches736 = html.matchAll(/https:\/\/i\.pinimg\.com\/736x\/[a-z0-9\/]+\.jpg/g);
-    for (const m of matches736) all.add(m[0]);
-
-    // Fallback: originals
-    const matchesOrig = html.matchAll(/https:\/\/i\.pinimg\.com\/originals\/[a-z0-9\/]+\.jpg/g);
-    for (const m of matchesOrig) all.add(m[0]);
-
-    // Fallback: 564x
+    for (const m of html.matchAll(pattern736)) all.add(m[0]);
+    for (const m of html.matchAll(patternOrig)) all.add(m[0]);
     if (all.size < 4) {
-        const matches564 = html.matchAll(/https:\/\/i\.pinimg\.com\/564x\/[a-z0-9\/]+\.jpg/g);
-        for (const m of matches564) all.add(m[0]);
+        for (const m of html.matchAll(pattern564)) all.add(m[0]);
     }
 
     return [...all];
