@@ -2,6 +2,7 @@ import gsap from 'gsap';
 import { Draggable } from 'gsap/Draggable';
 import { db } from './firebase';
 import { collection, addDoc, getDoc, getDocs, doc } from 'firebase/firestore';
+import { makeZoomable } from './zoom.js';
 
 gsap.registerPlugin(Draggable);
 
@@ -258,22 +259,49 @@ function renderCards() {
   updateProgress();
 }
 
+let fullscreenCleanup = null;
+
 function openFullscreen(src) {
   let lb = document.getElementById('fullscreen-overlay');
   if (!lb) {
     lb = document.createElement('div');
     lb.id = 'fullscreen-overlay';
-    lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;padding:16px;cursor:zoom-out;';
+    lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:99999;display:none;justify-content:center;align-items:center;padding:16px;';
     lb.innerHTML = `
-      <img id="fullscreen-img" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;" />
-      <button onclick="document.getElementById('fullscreen-overlay').style.display='none'" style="position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.12);border:none;color:white;font-size:1.4rem;width:44px;height:44px;border-radius:50%;cursor:pointer;">✕</button>
+      <img id="fullscreen-img" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;user-select:none;" />
+      <button id="btn-close-fullscreen" style="position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.12);border:none;color:white;font-size:1.4rem;width:44px;height:44px;border-radius:50%;cursor:pointer;z-index:1;">✕</button>
+      <p style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:0.8rem;color:rgba(255,255,255,0.4);pointer-events:none;">Pizzica o scrolla per zoomare • Doppio tap per resettare</p>
     `;
-    lb.addEventListener('click', () => lb.style.display = 'none');
-    lb.querySelector('img').addEventListener('click', e => e.stopPropagation());
     document.body.appendChild(lb);
+    document.getElementById('btn-close-fullscreen').addEventListener('click', closeFullscreen);
+    lb.addEventListener('click', (e) => { if (e.target === lb) closeFullscreen(); });
   }
-  lb.querySelector('#fullscreen-img').src = src;
+
+  const img = lb.querySelector('#fullscreen-img');
+  img.src = src;
+  img.style.transform = '';
+  img.style.cursor = 'zoom-in';
   lb.style.display = 'flex';
+
+  // Block background (card deck) from receiving touch events
+  const deck = document.getElementById('card-deck');
+  if (deck) deck.style.pointerEvents = 'none';
+  document.body.style.overflow = 'hidden';
+  document.body.style.pointerEvents = 'none';
+  lb.style.pointerEvents = 'all';
+
+  if (fullscreenCleanup) fullscreenCleanup();
+  fullscreenCleanup = makeZoomable(img, lb);
+}
+
+function closeFullscreen() {
+  const lb = document.getElementById('fullscreen-overlay');
+  if (lb) lb.style.display = 'none';
+  const deck = document.getElementById('card-deck');
+  if (deck) deck.style.pointerEvents = '';
+  document.body.style.overflow = '';
+  document.body.style.pointerEvents = '';
+  if (fullscreenCleanup) { fullscreenCleanup(); fullscreenCleanup = null; }
 }
 
 function setupDraggable() {

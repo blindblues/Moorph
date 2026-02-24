@@ -1,5 +1,6 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
+import { makeZoomable } from './zoom.js';
 
 // --- Clipboard Helper (mobile-compatible) ---
 async function copyToClipboard(text) {
@@ -195,18 +196,32 @@ function renderImages() {
   `).join('');
 }
 
+let lightboxCleanup = null;
+
 window.openLightbox = (src) => {
     const overlay = document.getElementById('lightbox-overlay');
     const img = document.getElementById('lightbox-img');
     img.src = src;
+    img.style.transform = '';
+    img.style.cursor = 'zoom-in';
     overlay.classList.remove('hidden');
+    // Block all background interaction
     document.body.style.overflow = 'hidden';
+    document.body.style.pointerEvents = 'none';
+    overlay.style.pointerEvents = 'all';
+    // Attach zoom
+    if (lightboxCleanup) lightboxCleanup();
+    lightboxCleanup = makeZoomable(img, overlay);
 };
 
 window.closeLightbox = () => {
-    document.getElementById('lightbox-overlay').classList.add('hidden');
-    document.getElementById('lightbox-img').src = '';
+    const overlay = document.getElementById('lightbox-overlay');
+    const img = document.getElementById('lightbox-img');
+    overlay.classList.add('hidden');
+    img.src = '';
     document.body.style.overflow = '';
+    document.body.style.pointerEvents = '';
+    if (lightboxCleanup) { lightboxCleanup(); lightboxCleanup = null; }
 };
 
 async function renderResults() {
