@@ -36,10 +36,8 @@ const AdminData = {
             });
             return `${window.location.origin}/?s=${project.id}`;
         } catch (e) {
-            console.error('Errore nel generare il link breve:', e);
-            // Fallback to long link if Firebase fails
-            const data = JSON.stringify(project);
-            return `${window.location.origin}/?d=${btoa(data)}`;
+            console.error('Errore Firebase:', e);
+            throw e; // Rilanciamo l'errore per gestirlo nel bottone
         }
     }
 };
@@ -156,7 +154,7 @@ function setupEventListeners() {
         if (!name || !pass) return alert('Inserisci nome e password');
 
         const newProject = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: Math.random().toString(36).substr(2, 6), // Solo 6 caratteri per l'ID
             name,
             password: pass,
             images: []
@@ -187,11 +185,18 @@ function setupEventListeners() {
         const originalText = btn.innerText;
         btn.innerText = 'Generando...';
 
-        const url = await AdminData.generateShareLink(activeProject);
-
-        navigator.clipboard.writeText(url);
-        btn.innerText = originalText;
-        alert('URL Breve copiato! Ora puoi inviarlo a chiunque.');
+        try {
+            const url = await AdminData.generateShareLink(activeProject);
+            navigator.clipboard.writeText(url);
+            btn.innerText = originalText;
+            alert('URL Ultra-Breve copiato!');
+        } catch (err) {
+            btn.innerText = originalText;
+            alert('Errore Firebase: Controlla le "Rules" su Firebase Console o la tua connessione.');
+            // Fallback estremo se proprio Firestore è giù
+            const data = btoa(JSON.stringify(activeProject));
+            navigator.clipboard.writeText(`${window.location.origin}/?d=${data}`);
+        }
     });
 
     // Image Upload Mock
