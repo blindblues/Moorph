@@ -461,25 +461,51 @@ function setupEventListeners() {
 // --- Pinterest Fetcher ---
 async function fetchPinterestImages(boardUrl) {
     const normalized = boardUrl.replace(/\/?$/, '/');
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(normalized)}`;
-    const res = await fetch(proxyUrl);
-    if (!res.ok) throw new Error('Proxy non raggiungibile');
-    const data = await res.json();
 
-    // Pinterest HTML has JSON-escaped URLs: https:\/\/i.pinimg.com\/...
-    // Unescape backslashes so the regex can match them
-    const html = data.contents.replace(/\\\//g, '/');
+    // Try multiple CORS proxies in order
+    const proxies = [
+        async (url) => {
+            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(8000) });
+            const d = await r.json();
+            return d.contents;
+        },
+        async (url) => {
+            const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(8000) });
+            return r.text();
+        },
+        async (url) => {
+            const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(8000) });
+            return r.text();
+        }
+    ];
+
+    let html = null;
+    for (const tryProxy of proxies) {
+        try {
+            const result = await tryProxy(normalized);
+            if (result && result.includes('pinimg')) { html = result; break; }
+        } catch { continue; }
+    }
+
+    if (!html) {
+        const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        if (isLocal) {
+            throw new Error('I proxy CORS non funzionano su localhost. Funzionerà sulla versione online del sito (Cloudflare).');
+        }
+        throw new Error('Tutti i proxy non disponibili. Riprova tra qualche secondo.');
+    }
+
+    // Unescape JSON-encoded backslashes: https:\/\/i.pinimg.com\/...
+    const clean = html.replace(/\\\//g, '/');
 
     const all = new Set();
-    const pattern736 = /https:\/\/i\.pinimg\.com\/736x\/[\w\/\-]+\.jpg/g;
-    const patternOrig = /https:\/\/i\.pinimg\.com\/originals\/[\w\/\-]+\.jpg/g;
-    const pattern564 = /https:\/\/i\.pinimg\.com\/564x\/[\w\/\-]+\.jpg/g;
+    const p736 = /https:\/\/i\.pinimg\.com\/736x\/[\w\/\-]+\.jpg/g;
+    const pOrig = /https:\/\/i\.pinimg\.com\/originals\/[\w\/\-]+\.jpg/g;
+    const p564 = /https:\/\/i\.pinimg\.com\/564x\/[\w\/\-]+\.jpg/g;
 
-    for (const m of html.matchAll(pattern736)) all.add(m[0]);
-    for (const m of html.matchAll(patternOrig)) all.add(m[0]);
-    if (all.size < 4) {
-        for (const m of html.matchAll(pattern564)) all.add(m[0]);
-    }
+    for (const m of clean.matchAll(p736)) all.add(m[0]);
+    for (const m of clean.matchAll(pOrig)) all.add(m[0]);
+    if (all.size < 4) for (const m of clean.matchAll(p564)) all.add(m[0]);
 
     return [...all];
 }
