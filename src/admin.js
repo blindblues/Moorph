@@ -1,6 +1,27 @@
 import { db } from './firebase';
 import { collection, query, where, getDocs, addDoc, setDoc, doc, deleteDoc } from 'firebase/firestore';
 
+// --- Clipboard Helper (mobile-compatible) ---
+async function copyToClipboard(text) {
+    // 1. Modern API (requires HTTPS - works on deployed site)
+    if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+    }
+    // 2. Legacy fallback (works on all mobile browsers, even HTTP)
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px;'; // font-size:16px prevents iOS zoom
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+        document.execCommand('copy');
+    } finally {
+        document.body.removeChild(ta);
+    }
+}
+
 // --- Admin Data Management ---
 const AdminData = {
     async getProjects() {
@@ -286,7 +307,7 @@ function setupEventListeners() {
 
         try {
             const url = await AdminData.generateShareLink(activeProject);
-            navigator.clipboard.writeText(url);
+            await copyToClipboard(url);
             btn.innerText = '✅ Copiato!';
             setTimeout(() => btn.innerText = originalText, 2000);
         } catch (err) {
