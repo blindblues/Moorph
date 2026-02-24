@@ -3,13 +3,24 @@ import { Draggable } from 'gsap/Draggable'; // Fixed case for Linux compatibilit
 
 gsap.registerPlugin(Draggable);
 
-// --- Data Management (Mocked) ---
+// --- Data Management ---
 const DataManager = {
   getProject(id) {
     const projects = JSON.parse(localStorage.getItem('moorph_projects') || '[]');
     return projects.find(p => p.id === id);
   },
+  // New: Decode project from URL
+  decodeFromUrl(encodedData) {
+    try {
+      const decoded = atob(encodedData);
+      return JSON.parse(decoded);
+    } catch (e) {
+      console.error('Errore nel decodificare il progetto dal link', e);
+      return null;
+    }
+  },
   saveResult(projectId, results) {
+    // We'll keep local saving for the user, but we'll soon add a way to export results
     const allResults = JSON.parse(localStorage.getItem('moorph_results') || '{}');
     allResults[projectId] = results;
     localStorage.setItem('moorph_results', JSON.stringify(allResults));
@@ -116,13 +127,25 @@ const views = {
 async function init() {
   const params = new URLSearchParams(window.location.search);
   const projectId = params.get('p');
+  const encodedProject = params.get('d');
 
   state.particles = new SwipeParticles();
+
+  if (encodedProject) {
+    // 1. Priority: Load from URL (Encrypted/Encoded data)
+    const project = DataManager.decodeFromUrl(encodedProject);
+    if (project) {
+      state.currentProject = project;
+      showView('password');
+      return;
+    }
+  }
 
   if (!projectId) {
     // Demo Mode if no project ID
     setupDemo();
   } else {
+    // 2. Fallback: Load from Local Storage (only for the creator)
     const project = DataManager.getProject(projectId);
     if (!project) {
       alert('Progetto non trovato');

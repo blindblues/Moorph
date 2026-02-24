@@ -9,6 +9,17 @@ const AdminData = {
     getResults(projectId) {
         const allResults = JSON.parse(localStorage.getItem('moorph_results') || '{}');
         return allResults[projectId] || null;
+    },
+    // Generate a URL that contains all project data encoded
+    generateShareLink(project) {
+        const data = JSON.stringify({
+            id: project.id,
+            name: project.name,
+            password: project.password,
+            images: project.images
+        });
+        const encoded = btoa(data); // Simple base64 encoding
+        return `${window.location.origin}/index.html?d=${encoded}`;
     }
 };
 
@@ -50,8 +61,8 @@ window.selectProject = (id) => {
     document.getElementById('detail-name').innerText = activeProject.name;
     document.getElementById('edit-password').value = activeProject.password;
 
-    const url = `${window.location.origin}/index.html?p=${activeProject.id}`;
-    document.getElementById('detail-url').innerText = `URL: ${url}`;
+    const shareUrl = AdminData.generateShareLink(activeProject);
+    document.getElementById('detail-url').innerText = `Link Pubblico: Pronto per la condivisione`;
 
     renderImages();
     renderResults();
@@ -143,9 +154,9 @@ function setupEventListeners() {
     });
 
     document.getElementById('btn-copy-url').addEventListener('click', () => {
-        const url = `${window.location.origin}/index.html?p=${activeProject.id}`;
+        const url = AdminData.generateShareLink(activeProject);
         navigator.clipboard.writeText(url);
-        alert('URL copiato!');
+        alert('URL Pubblico copiato! Ora puoi inviarlo a chiunque, non ha bisogno di salvataggi locali.');
     });
 
     // Image Upload Mock
