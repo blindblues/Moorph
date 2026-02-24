@@ -329,6 +329,7 @@ function setupDraggable() {
     },
     onDragEnd: function () {
       const x = this.x;
+      state.dragDistX = 0; // Reset so tap detection works on next card
       if (Math.abs(x) > 100) {
         swipe(x > 0 ? 'right' : 'left');
       } else {
