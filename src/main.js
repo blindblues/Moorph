@@ -1,5 +1,7 @@
 import gsap from 'gsap';
-import { Draggable } from 'gsap/Draggable'; // Fixed case for Linux compatibility
+import { Draggable } from 'gsap/Draggable';
+import { db } from './firebase';
+import { collection, addDoc, getDoc, doc } from 'firebase/firestore';
 
 gsap.registerPlugin(Draggable);
 
@@ -19,11 +21,22 @@ const DataManager = {
       return null;
     }
   },
-  saveResult(projectId, results) {
-    // We'll keep local saving for the user, but we'll soon add a way to export results
-    const allResults = JSON.parse(localStorage.getItem('moorph_results') || '{}');
-    allResults[projectId] = results;
-    localStorage.setItem('moorph_results', JSON.stringify(allResults));
+  async saveResult(projectId, results) {
+    try {
+      // Save to Firebase
+      await addDoc(collection(db, 'results'), {
+        projectId: projectId,
+        timestamp: new Date().toISOString(),
+        data: results
+      });
+
+      // Maintain local copy
+      const allResults = JSON.parse(localStorage.getItem('moorph_results') || '{}');
+      allResults[projectId] = results;
+      localStorage.setItem('moorph_results', JSON.stringify(allResults));
+    } catch (e) {
+      console.error('Errore nel salvataggio su Firebase:', e);
+    }
   }
 };
 

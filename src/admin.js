@@ -1,3 +1,6 @@
+import { db } from './firebase';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+
 // --- Admin Data Management ---
 const AdminData = {
     getProjects() {
@@ -6,9 +9,19 @@ const AdminData = {
     saveProjects(projects) {
         localStorage.setItem('moorph_projects', JSON.stringify(projects));
     },
-    getResults(projectId) {
-        const allResults = JSON.parse(localStorage.getItem('moorph_results') || '{}');
-        return allResults[projectId] || null;
+    async getResults(projectId) {
+        try {
+            const q = query(
+                collection(db, 'results'),
+                where('projectId', '==', projectId),
+                orderBy('timestamp', 'desc')
+            );
+            const querySnapshot = await getDocs(q);
+            return querySnapshot.docs.map(doc => doc.data());
+        } catch (e) {
+            console.error('Errore nel recupero dei risultati:', e);
+            return [];
+        }
     },
     // Generate a URL that contains all project data encoded
     generateShareLink(project) {
@@ -51,7 +64,7 @@ function renderProjectList() {
   `).join('');
 }
 
-window.selectProject = (id) => {
+window.selectProject = async (id) => {
     const projects = AdminData.getProjects();
     activeProject = projects.find(p => p.id === id);
 
@@ -65,7 +78,7 @@ window.selectProject = (id) => {
     document.getElementById('detail-url').innerText = `Link Pubblico: Pronto per la condivisione`;
 
     renderImages();
-    renderResults();
+    await renderResults();
     renderProjectList();
 };
 
@@ -78,22 +91,30 @@ function renderImages() {
   `).join('');
 }
 
-function renderResults() {
-    const results = AdminData.getResults(activeProject.id);
-    if (!results) {
+async function renderResults() {
+    const allSubmissions = await AdminData.getResults(activeProject.id);
+
+    if (allSubmissions.length === 0) {
         el.resultsSummary.innerHTML = '<p>Ancora nessun risultato per questo progetto.</p>';
         return;
     }
 
-    const liked = results.filter(r => r.liked);
-    el.resultsSummary.innerHTML = `
-    <div class="stats">
-      <p><b>${liked.length}</b> Mi piace su ${results.length} totali</p>
-    </div>
-    <div class="liked-gallery">
-      ${liked.map(r => `<img src="${r.image}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px; margin: 5px;" />`).join('')}
-    </div>
-  `;
+    el.resultsSummary.innerHTML = allSubmissions.map((submission, sIdx) => {
+        const liked = submission.data.filter(r => r.liked);
+        const date = new Date(submission.timestamp).toLocaleString();
+
+        return `
+            <div class="result-card glass-card" style="margin-bottom: 20px; padding: 15px;">
+                <div class="stats" style="margin-bottom: 10px;">
+                    <p><b>Utente ${allSubmissions.length - sIdx}</b> - ${date}</p>
+                    <p><b>${liked.length}</b> Mi piace su ${submission.data.length} immagini</p>
+                </div>
+                <div class="liked-gallery" style="display: flex; flex-wrap: wrap; gap: 5px;">
+                    ${liked.map(r => `<img src="${r.image}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 4px;" />`).join('')}
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 
 // --- Actions ---
