@@ -221,34 +221,88 @@ const AdminData = {
         }
     },
     async deleteFromGitHub(projectId, url) {
+        // Compatibility wrapper for single delete (not used in bulk anymore)
+        const fileName = url.split('/').pop();
+        await this.bulkGitHubUpdate(projectId, { additions: [], deletions: [fileName] });
+    },
+    async bulkGitHubUpdate(projectId, { additions = [], deletions = [] }) {
         const config = JSON.parse(localStorage.getItem('moorph_gh_config') || '{}');
-        if (!config.token || !config.owner || !config.repo) return;
+        if (!config.token || !config.owner || !config.repo) {
+            console.warn('GitHub Config incompleta per Bulk Update.');
+            return null;
+        }
 
         try {
-            const fileName = url.split('/').pop();
-            const path = `public/projects/${projectId}/${fileName}`;
+            // 1. Convert additions to base64
+            const fileAdditions = await Promise.all(additions.map(async ({ file, name }) => {
+                const reader = new FileReader();
+                const base64 = await new Promise((resolve) => {
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(file);
+                });
+                return {
+                    path: `public/projects/${projectId}/${name}`,
+                    contents: base64
+                };
+            }));
 
-            // 1. Get SHA
-            const getResp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`, {
+            const fileDeletions = deletions.map(name => ({
+                path: `public/projects/${projectId}/${name}`
+            }));
+
+            // 2. GitHub GraphQL Mutation for Atomic Multiple-File Commit
+            const query = `
+                mutation ($input: CreateCommitOnDefaultBranchInput!) {
+                  createCommitOnDefaultBranch(input: $input) {
+                    commit { url }
+                  }
+                }
+            `;
+
+            // We need the repository ID and the last commit SHA (expectedHeadOid)
+            // For simplicity, we can fetch these in one call or use the repository name
+            // Actually, we need the "repositoryNameWithOwner"
+            const repoInfoResp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}`, {
                 headers: { 'Authorization': `token ${config.token}` }
             });
-            if (!getResp.ok) return;
-            const fileData = await getResp.json();
+            const repoInfo = await repoInfoResp.json();
 
-            // 2. Delete
-            await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`, {
-                method: 'DELETE',
+            const branchInfoResp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/branches/${repoInfo.default_branch}`, {
+                headers: { 'Authorization': `token ${config.token}` }
+            });
+            const branchInfo = await branchInfoResp.json();
+
+            const variables = {
+                input: {
+                    branch: {
+                        repositoryNameWithOwner: `${config.owner}/${config.repo}`,
+                        branchName: repoInfo.default_branch
+                    },
+                    message: { headline: `Bulk update for project ${projectId} via Moorph Admin` },
+                    expectedHeadOid: branchInfo.commit.sha,
+                    fileChanges: {
+                        additions: fileAdditions,
+                        deletions: fileDeletions
+                    }
+                }
+            };
+
+            const resp = await fetch('https://api.github.com/graphql', {
+                method: 'POST',
                 headers: {
                     'Authorization': `token ${config.token}`,
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    message: `Delete image from project ${projectId} via Moorph Admin`,
-                    sha: fileData.sha
-                })
+                body: JSON.stringify({ query, variables })
             });
+
+            const result = await resp.json();
+            if (result.errors) throw new Error(result.errors[0].message);
+
+            return { success: true };
         } catch (e) {
-            console.error('Errore eliminazione GitHub:', e);
+            console.error('Errore durante il Bulk GitHub Commit:', e);
+            return null;
         }
     }
 };
@@ -537,55 +591,24 @@ function setupEventListeners() {
         const input = document.getElementById('share-link-input');
         const url = input.value;
 
-        // Select text in input so user sees what's copied
         input.select();
         input.setSelectionRange(0, 99999);
 
         try {
-            // Try to sync project to Firebase first (for short URL to work)
             await AdminData.syncProjectToFirebase(activeProject);
-        } catch (e) {
-            console.warn('Firebase sync fallito, il link breve potrebbe non funzionare:', e);
-        }
-
-        try {
             await copyToClipboard(url);
             btn.innerText = '✅ Copiato!';
             setTimeout(() => btn.innerText = originalText, 2000);
-        } catch {
-            // Input is still selected, user can copy manually
-            btn.innerText = '⚠️ Seleziona e copia manualmente';
+        } catch (e) {
+            btn.innerText = '⚠️ Errore Copia';
             setTimeout(() => btn.innerText = originalText, 3000);
         }
     });
 
-    // Real file upload
+    // --- UPLOAD SYSTEM ---
     document.getElementById('drop-zone').addEventListener('click', () => {
         document.getElementById('file-input').click();
     });
-
-    // Process image: Try to upload locally (if dev), then GitHub (if configured), then base64
-    async function processImage(file) {
-        // 1. Try Local Upload (Zero compression, works only on localhost)
-        const local = await AdminData.uploadLocalImage(activeProject.id, file);
-        if (local && local.success) {
-            return local.url;
-        }
-
-        // 2. Try GitHub Upload (If configured)
-        const gh = await AdminData.uploadToGitHub(activeProject.id, file);
-        if (gh && gh.success) {
-            return gh.url;
-        }
-
-        // 3. Last fallback: Full-quality Base64
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    }
 
     document.getElementById('file-input').addEventListener('change', async (e) => {
         const files = Array.from(e.target.files);
@@ -597,24 +620,40 @@ function setupEventListeners() {
         zone.style.pointerEvents = 'none';
 
         try {
-            const results = [];
-            for (let i = 0; i < files.length; i++) {
-                const percent = Math.round(((i) / files.length) * 100);
-                el.uploadProgressBar.style.width = `${percent}%`;
-                el.uploadStatusText.innerText = `Caricamento immagine ${i + 1} di ${files.length}... (${percent}%)`;
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-                const res = await processImage(files[i]);
-                results.push(res);
+            if (isLocal) {
+                const results = [];
+                for (let i = 0; i < files.length; i++) {
+                    const percent = Math.round(((i) / files.length) * 100);
+                    el.uploadProgressBar.style.width = `${percent}%`;
+                    el.uploadStatusText.innerText = `Salvataggio locale immagine ${i + 1} di ${files.length}...`;
+                    const res = await AdminData.uploadLocalImage(activeProject.id, files[i]);
+                    if (res && res.url) results.push(res.url);
+                }
+                activeProject.images.push(...results);
+            } else {
+                el.uploadStatusText.innerText = `Preparazione commit atomico GitHub per ${files.length} immagini...`;
+                el.uploadProgressBar.style.width = `50%`;
+
+                const res = await AdminData.bulkGitHubUpdate(activeProject.id, {
+                    additions: files.map(f => ({ file: f, name: f.name }))
+                });
+
+                if (res && res.success) {
+                    const newUrls = files.map(f => `/projects/${activeProject.id}/${f.name}`);
+                    activeProject.images.push(...newUrls);
+                    el.uploadProgressBar.style.width = '100%';
+                    el.uploadStatusText.innerText = 'Push GitHub completato (Commit unico)!';
+                } else {
+                    throw new Error('Errore durante il Bulk Update GitHub. Verifica il Token.');
+                }
             }
 
-            el.uploadProgressBar.style.width = '100%';
-            el.uploadStatusText.innerText = 'Completato!';
-
-            activeProject.images.push(...results);
             await updateActiveProject();
         } catch (err) {
             console.error('Errore upload:', err);
-            alert('Errore durante il caricamento delle immagini.');
+            alert('Errore: ' + err.message);
         } finally {
             setTimeout(() => {
                 el.uploadPrompt.classList.remove('hidden');
@@ -622,32 +661,30 @@ function setupEventListeners() {
                 el.uploadProgressBar.style.width = '0%';
                 zone.style.pointerEvents = '';
                 e.target.value = '';
-            }, 1000);
+            }, 1500);
         }
     });
 
-    // Local Folder Sync (Full Sync)
+    // --- SYNC & SETTINGS ---
     document.getElementById('btn-sync-folder').addEventListener('click', async () => {
         const btn = document.getElementById('btn-sync-folder');
         btn.innerText = '⌛ Sincronizzazione...';
         btn.disabled = true;
 
         try {
-            // 1. Try Local Sync
             const local = await AdminData.getLocalImages(activeProject.id);
             if (local && local.images) {
                 activeProject.images = local.images;
                 await updateActiveProject();
-                alert(`Sincronizzazione locale completata! Trovate ${local.images.length} immagini.`);
+                alert(`Sincronizzazione locale completata!`);
             } else {
-                // 2. Try GitHub Sync (if local fails, we might be online)
                 const ghImages = await AdminData.getGitHubImages(activeProject.id);
                 if (ghImages) {
                     activeProject.images = ghImages;
                     await updateActiveProject();
-                    alert(`Sincronizzazione GitHub completata! Trovate ${ghImages.length} immagini.`);
+                    alert(`Sincronizzazione GitHub completata!`);
                 } else {
-                    alert('Impossibile accedere alla cartella locale o a GitHub.\nVerifica la configurazione nelle impostazioni.');
+                    alert('Impossibile accedere ai file.');
                 }
             }
         } catch (e) {
@@ -658,7 +695,6 @@ function setupEventListeners() {
         }
     });
 
-    // --- GitHub Settings ---
     const loadGHConfig = () => {
         const config = JSON.parse(localStorage.getItem('moorph_gh_config') || '{"owner":"blindblues","repo":"Moorph"}');
         document.getElementById('gh-token').value = config.token || '';
@@ -682,11 +718,11 @@ function setupEventListeners() {
             repo: document.getElementById('gh-repo').value.trim()
         };
         localStorage.setItem('moorph_gh_config', JSON.stringify(config));
-        alert('Configurazione GitHub salvata localmente nel browser!');
+        alert('Configurazione GitHub salvata!');
         el.modalSettings.classList.add('hidden');
     });
 
-    // --- Bulk Actions ---
+    // --- BULK ACTIONS ---
     document.getElementById('btn-select-all').addEventListener('click', () => {
         activeProject.images.forEach(img => selectedImages.add(img));
         updateBulkBar();
@@ -701,31 +737,40 @@ function setupEventListeners() {
 
     document.getElementById('btn-delete-selected').addEventListener('click', async () => {
         const count = selectedImages.size;
-        if (!confirm(`Sei sicuro di voler eliminare definitivamente ${count} immagini?`)) return;
+        if (!confirm(`Vuoi eliminare ${count} immagini in un unico push?`)) return;
 
         const btn = document.getElementById('btn-delete-selected');
         btn.disabled = true;
-        btn.innerText = '⌛ Eliminazione...';
+        btn.innerText = '⌛ Eliminazione di massa...';
 
         try {
+            const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
             const toDelete = Array.from(selectedImages);
-            for (const url of toDelete) {
-                await AdminData.deleteLocalImage(activeProject.id, url);
-                await AdminData.deleteFromGitHub(activeProject.id, url);
-                activeProject.images = activeProject.images.filter(img => img !== url);
+            const fileNames = toDelete.map(url => url.split('/').pop());
+
+            if (isLocal) {
+                for (const url of toDelete) {
+                    await AdminData.deleteLocalImage(activeProject.id, url);
+                }
+            } else {
+                await AdminData.bulkGitHubUpdate(activeProject.id, {
+                    additions: [],
+                    deletions: fileNames
+                });
             }
+
+            activeProject.images = activeProject.images.filter(img => !selectedImages.has(img));
             selectedImages.clear();
             updateBulkBar();
             await updateActiveProject();
             alert(`Eliminate ${count} immagini con successo!`);
         } catch (e) {
-            alert('Errore durante l\'eliminazione multipla.');
+            alert('Errore: ' + e.message);
         } finally {
             btn.disabled = false;
             btn.innerText = '🗑 Elimina Selezionati';
         }
     });
-
 }
 
 
