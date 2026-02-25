@@ -58,6 +58,21 @@ export default defineConfig({
             return;
           }
 
+          if (req.url.startsWith('/api/uploads/delete') && req.method === 'DELETE') {
+            const url = new URL(req.url, `http://${req.headers.host}`);
+            const id = url.searchParams.get('id');
+            const fileName = url.searchParams.get('name');
+            if (id && fileName) {
+              const filePath = resolve(__dirname, 'public', 'projects', id, fileName);
+              if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+              }
+              res.statusCode = 200;
+              res.end(JSON.stringify({ success: true }));
+              return;
+            }
+          }
+
           if (req.url.startsWith('/api/uploads/save') && req.method === 'POST') {
             const url = new URL(req.url, `http://${req.headers.host}`);
             const id = url.searchParams.get('id');

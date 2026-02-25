@@ -60,48 +60,28 @@ const AdminData = {
     },
     async syncProjectToFirebase(project) {
         try {
-            // 1. Sync metadata to main doc (avoid 1MB limit by excluding images)
+            // ONLY sync metadata (name, password, etc.). 
+            // NO IMAGES stored in Firebase anymore.
             const { images, ...meta } = project;
             await setDoc(doc(db, 'projects', project.id), {
                 ...meta,
                 updatedAt: new Date().toISOString()
             });
 
-            // 2. Sync images to sub-collection
+            // Cleanup: ensure the images sub-collection is empty if it exists
             const imagesRef = collection(db, 'projects', project.id, 'images');
-
-            // Get current images in Firebase to find orphans
             const existingSnap = await getDocs(imagesRef);
-            const existingIds = existingSnap.docs.map(d => d.id);
-
-            // Write current images
-            for (let i = 0; i < images.length; i++) {
-                await setDoc(doc(db, 'projects', project.id, 'images', String(i)), {
-                    url: images[i],
-                    order: i
-                });
-            }
-
-            // 3. Delete orphans (if images were removed)
-            const newIds = images.map((_, i) => String(i));
-            const orphans = existingIds.filter(id => !newIds.includes(id));
-            for (const id of orphans) {
-                await deleteDoc(doc(db, 'projects', project.id, 'images', id));
+            for (const d of existingSnap.docs) {
+                await deleteDoc(doc(db, 'projects', project.id, 'images', d.id));
             }
         } catch (e) {
             console.error('Errore durante il sync con Firebase:', e);
         }
     },
     async getProjectImages(projectId) {
-        try {
-            const snap = await getDocs(collection(db, 'projects', projectId, 'images'));
-            return snap.docs
-                .map(d => ({ ...d.data(), id: d.id }))
-                .sort((a, b) => a.order - b.order)
-                .map(d => d.url);
-        } catch (e) {
-            return [];
-        }
+        // We now fetch images only from local/github or they are carried in the object
+        // Firestore is NO LONGER the source for images.
+        return [];
     },
     async getResults(projectId) {
         try {
@@ -161,6 +141,12 @@ const AdminData = {
             return null;
         }
     },
+    async deleteLocalImage(projectId, url) {
+        try {
+            const fileName = url.split('/').pop();
+            await fetch(`/api/uploads/delete?id=${projectId}&name=${encodeURIComponent(fileName)}`, { method: 'DELETE' });
+        } catch (e) { }
+    },
     async uploadToGitHub(projectId, file) {
         const config = JSON.parse(localStorage.getItem('moorph_gh_config') || '{}');
         if (!config.token || !config.owner || !config.repo) {
@@ -209,6 +195,37 @@ const AdminData = {
             console.error('Errore GitHub upload:', e);
             return null;
         }
+    },
+    async deleteFromGitHub(projectId, url) {
+        const config = JSON.parse(localStorage.getItem('moorph_gh_config') || '{}');
+        if (!config.token || !config.owner || !config.repo) return;
+
+        try {
+            const fileName = url.split('/').pop();
+            const path = `public/projects/${projectId}/${fileName}`;
+
+            // 1. Get SHA
+            const getResp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`, {
+                headers: { 'Authorization': `token ${config.token}` }
+            });
+            if (!getResp.ok) return;
+            const fileData = await getResp.json();
+
+            // 2. Delete
+            await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `token ${config.token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: `Delete image from project ${projectId} via Moorph Admin`,
+                    sha: fileData.sha
+                })
+            });
+        } catch (e) {
+            console.error('Errore eliminazione GitHub:', e);
+        }
     }
 };
 
@@ -248,8 +265,15 @@ window.selectProject = async (id) => {
     activeProject = projects.find(p => p.id === id);
     if (!activeProject) return;
 
-    // Fetch images from sub-collection
-    activeProject.images = await AdminData.getProjectImages(id);
+    // Fetch images from sub-collection (NO LONGER FROM FIREBASE)
+    // Try to load from local directory/github config
+    const localData = await AdminData.getLocalImages(id);
+    if (localData && localData.images) {
+        activeProject.images = localData.images;
+    } else {
+        // Fallback or keep current if we have them cached in the object
+        activeProject.images = activeProject.images || [];
+    }
 
     el.emptyState.classList.add('hidden');
     el.projectDetail.classList.remove('hidden');
@@ -274,8 +298,8 @@ window.selectProject = async (id) => {
     renderProjectList();
 
     // Check for local folder
-    const local = await AdminData.getLocalImages(id);
-    if (local) {
+    const localFolder = await AdminData.getLocalImages(id);
+    if (localFolder) {
         el.localFolderInfo.style.display = 'block';
         el.localFolderInfo.innerText = `📂 Cartella: public/projects/${id}`;
     } else {
@@ -353,8 +377,16 @@ async function renderResults() {
 
 // --- Actions ---
 window.removeImage = async (idx) => {
-    activeProject.images.splice(idx, 1);
-    await updateActiveProject();
+    const url = activeProject.images[idx];
+    if (confirm('Eliminare definitivamente questa immagine anche dal disco/GitHub?')) {
+        // 1. Physical deletion
+        await AdminData.deleteLocalImage(activeProject.id, url);
+        await AdminData.deleteFromGitHub(activeProject.id, url);
+
+        // 2. State update
+        activeProject.images.splice(idx, 1);
+        await updateActiveProject();
+    }
 };
 
 async function updateActiveProject() {
@@ -511,39 +543,26 @@ function setupEventListeners() {
         }
     });
 
-    // Local Folder Sync (System requested by user)
+    // Local Folder Sync (Full Sync)
     document.getElementById('btn-sync-folder').addEventListener('click', async () => {
         const btn = document.getElementById('btn-sync-folder');
-        const originalText = btn.innerText;
         btn.innerText = '⌛ Sincronizzazione...';
         btn.disabled = true;
 
         try {
             const data = await AdminData.getLocalImages(activeProject.id);
-            if (data && data.images && data.images.length > 0) {
-                // Merge with existing images (avoid duplicates)
-                const current = new Set(activeProject.images);
-                let added = 0;
-                data.images.forEach(img => {
-                    if (!current.has(img)) {
-                        activeProject.images.push(img);
-                        added++;
-                    }
-                });
-
-                if (added > 0) {
-                    await updateActiveProject();
-                    alert(`Sincronizzati ${added} nuovi file dalla cartella locale!`);
-                } else {
-                    alert('Nessuna nuova immagine trovata nella cartella.');
-                }
+            if (data && data.images) {
+                // Perform a "Mirror" sync: the local folder IS the source of truth
+                activeProject.images = data.images;
+                await updateActiveProject();
+                alert(`Sincronizzazione completata! Trovate ${data.images.length} immagini.`);
             } else {
-                alert('La cartella è vuota o non contiene immagini supportate.\nInserisci i file in: public/projects/' + activeProject.id);
+                alert('Impossibile accedere alla cartella locale.');
             }
         } catch (e) {
             alert('Errore durante la sincronizzazione locale.');
         } finally {
-            btn.innerText = originalText;
+            btn.innerText = '🛸 Sincronizza Cartella';
             btn.disabled = false;
         }
     });
