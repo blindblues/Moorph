@@ -87,29 +87,6 @@
                         <p id="image-count" style="font-size: 0.85rem; color: var(--text-dim);"></p>
                     </div>
 
-                    <!-- Pinterest Import -->
-                    <div class="glass-card"
-                        style="padding: 18px; margin-bottom: 16px; background: rgba(230,0,35,0.05); border-color: rgba(230,0,35,0.2);">
-                        <label
-                            style="font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="#e60023">
-                                <path
-                                    d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z" />
-                            </svg>
-                            Importa da Pinterest
-                        </label>
-                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                            <input type="text" id="pinterest-url"
-                                placeholder="https://www.pinterest.com/utente/bacheca/"
-                                style="flex: 1; min-width: 200px; font-size: 0.9rem;" />
-                            <button id="btn-pinterest-import" class="btn-small"
-                                style="white-space: nowrap; background: rgba(230,0,35,0.15); border-color: rgba(230,0,35,0.4); color: #ff6b6b;">
-                                Importa Immagini
-                            </button>
-                        </div>
-                        <p id="pinterest-status"
-                            style="font-size: 0.8rem; color: var(--text-dim); margin-top: 8px; min-height: 1em;"></p>
-                    </div>
 
                     <div class="upload-area glass-card" id="drop-zone">
                         <div>
@@ -180,32 +157,6 @@
                 style="position:fixed;top:20px;right:20px;background:rgba(255,255,255,0.1);border:none;color:white;font-size:1.5rem;width:44px;height:44px;border-radius:50%;cursor:pointer;backdrop-filter:blur(10px);">✕</button>
         </div>
 
-        <!-- Pinterest Import Modal -->
-        <div id="modal-pinterest" class="modal-overlay hidden">
-            <div class="glass-card"
-                style="max-width: 780px; width: 100%; padding: 32px; max-height: 90vh; display: flex; flex-direction: column; gap: 20px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="margin: 0;">Scegli le immagini da Pinterest</h2>
-                    <button onclick="document.getElementById('modal-pinterest').classList.add('hidden')"
-                        class="btn-small">✕</button>
-                </div>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button id="btn-select-all" class="btn-small">Seleziona Tutte</button>
-                    <button id="btn-deselect-all" class="btn-small">Deseleziona Tutte</button>
-                    <span id="pinterest-selection-count"
-                        style="font-size: 0.85rem; color: var(--text-dim); align-self: center;"></span>
-                </div>
-                <div id="pinterest-grid"
-                    style="display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; overflow-y: auto; flex: 1; max-height: 55vh; padding: 4px;">
-                </div>
-                <div style="display: flex; justify-content: flex-end; gap: 12px;">
-                    <button onclick="document.getElementById('modal-pinterest').classList.add('hidden')"
-                        class="btn-small">Annulla</button>
-                    <button id="btn-add-pinterest" class="btn-primary" style="padding: 12px 24px;">Aggiungi
-                        Selezionate</button>
-                </div>
-            </div>
-        </div>
     </div>
 
     <script type="module" src="/src/admin.js"></script>
