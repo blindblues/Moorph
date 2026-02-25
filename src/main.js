@@ -1,50 +1,26 @@
 import gsap from 'gsap';
 import { Draggable } from 'gsap/Draggable';
 import { db } from './firebase';
-import { collection, addDoc, getDoc, getDocs, doc } from 'firebase/firestore';
+import { collection, addDoc, getDoc, doc } from 'firebase/firestore';
 import { makeZoomable } from './zoom.js';
 
 gsap.registerPlugin(Draggable);
 
 // --- Data Management ---
 const DataManager = {
-  getProject(id) {
-    const projects = JSON.parse(localStorage.getItem('moorph_projects') || '[]');
-    return projects.find(p => p.id === id);
-  },
-  // Fetch project + images from Firestore sub-collection
+  // Fetch project directly from doc - Images are now stored in the doc itself
   async getProjectFromFirebase(id) {
     try {
       const projectDoc = await getDoc(doc(db, 'projects', id));
       if (!projectDoc.exists()) return null;
-      const project = projectDoc.data();
-
-      // Fetch images from sub-collection
-      const imagesSnap = await getDocs(collection(db, 'projects', id, 'images'));
-      const images = imagesSnap.docs
-        .map(d => ({ ...d.data() }))
-        .sort((a, b) => a.order - b.order)
-        .map(d => d.url);
-
-      return { ...project, images };
+      return projectDoc.data();
     } catch (e) {
       console.error('Errore nel recupero del progetto da Firebase:', e);
       return null;
     }
   },
-  // New: Decode project from URL
-  decodeFromUrl(encodedData) {
-    try {
-      const decoded = atob(encodedData);
-      return JSON.parse(decoded);
-    } catch (e) {
-      console.error('Errore nel decodificare il progetto dal link', e);
-      return null;
-    }
-  },
   async saveResult(projectId, results) {
     try {
-      // Save to Firebase - This is the primary storage
       await addDoc(collection(db, 'results'), {
         projectId: projectId,
         timestamp: new Date().toISOString(),
@@ -115,12 +91,8 @@ class SwipeParticles {
 
       this.ctx.save();
       this.ctx.globalAlpha = p.alpha;
-
-      // Glow effect background
       this.ctx.shadowBlur = 15;
       this.ctx.shadowColor = p.color;
-
-      // Horizontal streak
       this.ctx.beginPath();
       this.ctx.moveTo(p.x, p.y);
       this.ctx.lineTo(p.x - p.vx * 2, p.y);
@@ -128,14 +100,11 @@ class SwipeParticles {
       this.ctx.lineWidth = p.size;
       this.ctx.lineCap = 'round';
       this.ctx.stroke();
-
-      // Bright core dot
       this.ctx.shadowBlur = 10;
       this.ctx.fillStyle = '#fff';
       this.ctx.beginPath();
       this.ctx.arc(p.x, p.y, p.size / 2.5, 0, Math.PI * 2);
       this.ctx.fill();
-
       this.ctx.restore();
     }
 
@@ -155,13 +124,10 @@ const views = {
 // --- Initialization ---
 async function init() {
   const params = new URLSearchParams(window.location.search);
-  const projectId = params.get('p');
-  const encodedProject = params.get('d');
   const shortId = params.get('s');
 
   state.particles = new SwipeParticles();
 
-  // 1. Priority: Short Link from Firebase
   if (shortId) {
     const project = await DataManager.getProjectFromFirebase(shortId);
     if (project) {
@@ -171,28 +137,8 @@ async function init() {
     }
   }
 
-  // 2. Secondary: Load from URL (Encrypted/Encoded data)
-  if (encodedProject) {
-    const project = DataManager.decodeFromUrl(encodedProject);
-    if (project) {
-      state.currentProject = project;
-      showView('password');
-      return;
-    }
-  }
-
-  // 3. Last Resort: Demo or Local Storage
-  if (!projectId) {
-    setupDemo();
-  } else {
-    const project = DataManager.getProject(projectId);
-    if (!project) {
-      alert('Progetto non trovato');
-      return;
-    }
-    state.currentProject = project;
-    showView('password');
-  }
+  // Demo fallback
+  setupDemo();
 }
 
 function setupDemo() {
@@ -212,7 +158,7 @@ function setupDemo() {
 
 function showView(viewId) {
   Object.values(views).forEach(v => v.classList.add('hidden'));
-  views[viewId].classList.remove('hidden');
+  if (views[viewId]) views[viewId].classList.remove('hidden');
 }
 
 // --- Auth ---
@@ -237,12 +183,16 @@ function renderCards() {
   deck.innerHTML = '';
 
   const images = state.currentProject.images;
+  if (!images || images.length === 0) {
+    alert('Questo progetto non ha immagini.');
+    return;
+  }
+
   images.forEach((img, idx) => {
     const card = document.createElement('div');
     card.className = 'tinder-card' + (idx > 0 ? ' bg-stack' : '');
     card.style.zIndex = images.length - idx;
-    card.innerHTML = `<img src="${img}" class="card-image" />`;
-    // Tap to fullscreen (only the top card, and only if not dragging)
+    card.innerHTML = `<img src="${img}" class="card-image" onerror="this.src='/vite.svg'; this.style.opacity=0.3;" />`;
     card.addEventListener('click', (e) => {
       if (Math.abs(state.dragDistX || 0) < 10) openFullscreen(img);
     });
@@ -255,7 +205,6 @@ function renderCards() {
 }
 
 let fullscreenCleanup = null;
-
 function openFullscreen(src) {
   let lb = document.getElementById('fullscreen-overlay');
   if (!lb) {
@@ -277,8 +226,6 @@ function openFullscreen(src) {
   img.style.transform = '';
   img.style.cursor = 'zoom-in';
   lb.style.display = 'flex';
-
-  // Block background (card deck) from receiving touch events
   const deck = document.getElementById('card-deck');
   if (deck) deck.style.pointerEvents = 'none';
   document.body.style.overflow = 'hidden';
@@ -301,11 +248,9 @@ function closeFullscreen() {
 
 function setupDraggable() {
   const cards = document.querySelectorAll('.tinder-card');
-  const topCard = cards[0]; // Always target the first card in the DOM since we remove others
-
+  const topCard = cards[0];
   if (!topCard) return;
 
-  // Cleanup existing Draggable on this card if any
   const existing = Draggable.get(topCard);
   if (existing) existing.kill();
 
@@ -313,10 +258,8 @@ function setupDraggable() {
     type: 'x,y',
     onDrag: function () {
       const x = this.x;
-      state.dragDistX = x; // Track drag so click handler can ignore drags
+      state.dragDistX = x;
       const opacity = Math.min(Math.abs(x) / 100, 1);
-
-      // Indicator Logic
       const likeNode = document.getElementById('indicator-like');
       const dislikeNode = document.getElementById('indicator-dislike');
       const auraLeft = document.getElementById('aura-left');
@@ -334,12 +277,10 @@ function setupDraggable() {
         gsap.set(auraRight, { opacity: 0 });
       }
 
-      // Particles emission
       if (opacity > 0.4) {
         state.particles.spawn(x, x > 0 ? 'right' : 'left', Math.random() > 0.7 ? 1 : 0);
       }
 
-      // Underneath card scaling
       const nextCard = topCard.nextElementSibling;
       if (nextCard && nextCard.classList.contains('tinder-card')) {
         const scale = 0.92 + (opacity * 0.08);
@@ -347,19 +288,17 @@ function setupDraggable() {
         const y = 30 - (opacity * 30);
         gsap.set(nextCard, { scale: scale, filter: `blur(${blur}px)`, y: y, opacity: 0.4 + (opacity * 0.6) });
       }
-
       gsap.to(topCard, { rotation: x * 0.05, duration: 0 });
     },
     onDragEnd: function () {
       const x = this.x;
-      state.dragDistX = 0; // Reset so tap detection works on next card
+      state.dragDistX = 0;
       if (Math.abs(x) > 100) {
         swipe(x > 0 ? 'right' : 'left');
       } else {
         gsap.to(topCard, { x: 0, y: 0, rotation: 0, duration: 0.2, ease: 'power3.out' });
         gsap.to('.swipe-indicator', { opacity: 0, duration: 0.1 });
         gsap.to('.swipe-aura', { opacity: 0, duration: 0.1 });
-
         const nextCard = topCard.nextElementSibling;
         if (nextCard && nextCard.classList.contains('tinder-card')) {
           gsap.to(nextCard, { scale: 0.92, filter: 'blur(4px)', y: 30, opacity: 0.4, duration: 0.2 });
@@ -388,17 +327,15 @@ function swipe(direction) {
     duration: 0.25,
     ease: 'power3.in',
     onStart: () => {
-      state.particles.spawn(0, direction, 12); // Fewer particles on burst
+      state.particles.spawn(0, direction, 12);
     },
     onComplete: () => {
       card.remove();
       state.currentIndex++;
       state.isAnimating = false;
-
       gsap.set('.swipe-indicator', { opacity: 0 });
       gsap.set('.swipe-aura', { opacity: 0 });
       updateProgress();
-
       const nextCard = document.querySelector('.tinder-card');
       if (nextCard) {
         nextCard.classList.remove('bg-stack');
@@ -414,14 +351,12 @@ function swipe(direction) {
 function updateProgress() {
   const total = state.currentProject.images.length;
   const current = Math.min(state.currentIndex + 1, total);
-
   const prog = (state.currentIndex / total) * 100;
   document.getElementById('progress-bar').style.width = `${prog}%`;
   document.getElementById('image-counter').innerText = `${current} / ${total}`;
 }
 
 async function finishProject() {
-  // Add a small delay or loading state if needed, but for now just await
   await DataManager.saveResult(state.currentProject.id, state.results);
   showView('success');
 }

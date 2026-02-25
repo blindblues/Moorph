@@ -21,8 +21,6 @@
         <header class="admin-header glass-card">
             <div class="logo">Moorph Admin</div>
             <div style="display: flex; gap: 12px; align-items: center;">
-                <button id="btn-settings" class="btn-small"
-                    style="background: rgba(255,255,255,0.05); padding: 10px 15px;">⚙️ GitHub</button>
                 <button id="btn-create-project" class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem;">
                     + Nuovo Progetto
                 </button>
@@ -55,7 +53,7 @@
                                 style="font-family: monospace; color: var(--secondary);"></span></p>
                     </div>
                     <div class="project-actions">
-                        <button id="btn-delete-project" class="btn-danger">🗑 Elimina</button>
+                        <button id="btn-delete-project" class="btn-danger">🗑 Elimina Progetto</button>
                     </div>
                 </div>
 
@@ -63,8 +61,6 @@
                 <div class="glass-card" style="padding: 20px; background: rgba(255,255,255,0.01);">
                     <label style="font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 10px;">🔗 Link di
                         Condivisione</label>
-                    <p style="font-size: 0.8rem; color: var(--text-dim); margin-bottom: 10px;">Tieni premuto per copiare
-                        su mobile</p>
                     <input type="text" id="share-link-input" readonly
                         style="width: 100%; font-family: monospace; font-size: 0.85rem; color: var(--secondary); cursor: text; user-select: all;"
                         value="Seleziona progetto per generare il link" />
@@ -86,22 +82,27 @@
                 <!-- Image Management -->
                 <div class="image-management">
                     <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h2 style="margin: 0; font-size: 1.3rem; font-weight: 700;">🖼 Galleria Immagini</h2>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <p id="image-count" style="font-size: 0.85rem; color: var(--text-dim); margin: 0;"></p>
-                            <button id="btn-sync-folder" class="btn-small"
-                                style="font-size: 0.75rem; padding: 6px 12px; background: rgba(58, 134, 255, 0.1); color: var(--secondary); border: 1px solid rgba(58, 134, 255, 0.2);">🛸
-                                Sincronizza Cartella</button>
-                        </div>
+                        <p id="image-count" style="font-size: 0.85rem; color: var(--text-dim); margin: 0;"></p>
                     </div>
-                    <p id="local-folder-info"
-                        style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 15px; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 8px; font-family: monospace; display: none;">
-                    </p>
 
+                    <div class="glass-card"
+                        style="padding: 20px; background: rgba(255,255,255,0.03); margin-bottom: 20px;">
+                        <label
+                            style="font-weight: 600; font-size: 0.9rem; display: block; margin-bottom: 10px;">Aggiungi
+                            Immagine tramite URL</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="image-url-input" placeholder="https://esempio.com/immagine.jpg"
+                                style="flex: 1;" />
+                            <button id="btn-add-url" class="btn-primary" style="padding: 10px 20px;">Aggiungi</button>
+                        </div>
+                        <p style="font-size: 0.75rem; color: var(--text-dim); margin-top: 8px;">Usa link diretti a
+                            immagini (Pinterest, Unsplash, Imgur, ecc.)</p>
+                    </div>
 
                     <div id="bulk-actions-bar" class="hidden"
-                        style="margin-top: 20px; padding: 10px; background: rgba(255,59,59,0.05); border: 1px solid rgba(255,59,59,0.1); border-radius: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        style="margin-bottom: 20px; padding: 10px; background: rgba(255,59,59,0.05); border: 1px solid rgba(255,59,59,0.1); border-radius: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
                         <div style="display: flex; gap: 10px; align-items: center;">
                             <button id="btn-select-all" class="btn-small"
                                 style="font-size: 0.75rem; background: rgba(255,255,255,0.1);">✅ Seleziona
@@ -112,125 +113,52 @@
                                 selezionati</span>
                         </div>
                         <button id="btn-delete-selected" class="btn-danger btn-small"
-                            style="font-size: 0.75rem; padding: 6px 15px;">🗑 Elimina Selezionati</button>
+                            style="font-size: 0.75rem; padding: 6px 15px;">🗑 Rimuovi Selezionati</button>
                     </div>
 
-                    <div class="upload-area glass-card" id="drop-zone">
-                        <div id="upload-prompt">
-                            <p style="color: white; font-weight: 600;">Trascina o clicca per caricare</p>
-                            <p style="font-size: 0.8rem; margin-top: 4px;">PNG, JPG, WEBP supportati</p>
-                        </div>
-                        <div id="upload-progress-container" class="hidden" style="width: 80%;">
-                            <p id="upload-status-text"
-                                style="font-size: 0.9rem; margin-bottom: 10px; font-weight: 600; color: var(--secondary);">
-                                Caricamento...</p>
-                            <div class="progress-container"
-                                style="background: rgba(255,255,255,0.1); border-radius: 10px; height: 8px; overflow: hidden;">
-                                <div id="upload-progress-bar"
-                                    style="width: 0%; height: 100%; background: linear-gradient(to right, var(--primary), var(--secondary)); transition: width 0.3s ease; box-shadow: 0 0 10px var(--secondary-glow);">
-                                </div>
-                            </div>
-                        </div>
-                        <input type="file" id="file-input" multiple class="hidden" />
-                    </div>
-
-                    <div id="image-grid" class="image-grid" style="margin-top: 20px;">
+                    <div id="image-grid" class="image-grid">
                         <!-- Images injected by JS -->
                     </div>
                 </div>
 
-                <!-- Results Section -->
-                <div class="results-section">
-                    <h2>📊 Preferenze Raccolte</h2>
-                    <div id="results-summary" class="glass-card"
-                        style="padding: 24px; background: rgba(131, 56, 236, 0.04);">
-                        <p>Seleziona un progetto per vedere i risultati.</p>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Empty State -->
-            <section id="empty-state" class="empty-state">
-                <div class="glass-card" style="padding: 60px 40px; text-align: center; max-width: 500px;">
-                    <div style="font-size: 4rem; margin-bottom: 20px;">🎨</div>
-                    <h2>Benvenuto nell'Admin</h2>
-                    <p style="margin-top: 10px;">Seleziona un progetto esistente dalla lista<br>o creane uno nuovo per
-                        iniziare.</p>
-                </div>
-            </section>
-        </main>
-
-        <!-- GitHub Settings Modal -->
-        <div id="modal-settings" class="modal-overlay hidden">
-            <div class="glass-card modal-content fade-in" style="max-width: 480px; width: 100%; padding: 40px;">
-                <h2 style="margin-bottom: 5px;">Configurazione GitHub</h2>
-                <p style="font-size: 0.9rem; margin-bottom: 25px; color: var(--text-dim);">Necessaria per salvare le
-                    immagini direttamente nella repository quando sei online.</p>
-
-                <div class="input-group">
-                    <div>
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.85rem;">Token
-                            Accesso Personale (PAT)</label>
-                        <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" style="width: 100%;" />
-                        <p style="font-size: 0.7rem; color: var(--secondary); margin-top: 5px; opacity: 0.8;">Crea un
-                            token con permessi 'contents:write' su GitHub.</p>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                        <div>
-                            <label
-                                style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.85rem;">Owner</label>
-                            <input type="text" id="gh-owner" placeholder="blindblues" style="width: 100%;" />
+                <!-- Create Project Modal -->
+                <div id="modal-project" class="modal-overlay hidden">
+                    <div class="glass-card modal-content fade-in" style="max-width: 420px; width: 100%; padding: 40px;">
+                        <h2 style="margin-bottom: 5px;">Nuovo Progetto</h2>
+                        <p style="font-size: 0.9rem; margin-bottom: 30px;">Crea un progetto di stile da condividere.</p>
+                        <div class="input-group">
+                            <div>
+                                <label
+                                    style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Nome
+                                    Progetto</label>
+                                <input type="text" id="new-project-name" placeholder="es. Branding Studio XYZ"
+                                    style="width: 100%;" />
+                            </div>
+                            <div>
+                                <label
+                                    style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Password
+                                    Utente</label>
+                                <input type="text" id="new-project-pass" placeholder="Password per l'utente"
+                                    style="width: 100%;" />
+                            </div>
                         </div>
-                        <div>
-                            <label
-                                style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.85rem;">Repository</label>
-                            <input type="text" id="gh-repo" placeholder="Moorph" style="width: 100%;" />
+                        <div style="margin-top: 30px; display: flex; gap: 12px; justify-content: flex-end;">
+                            <button id="btn-cancel" class="btn-small" style="padding: 12px 24px;">Annulla</button>
+                            <button id="btn-save-project" class="btn-primary" style="padding: 12px 28px;">Crea
+                                Progetto</button>
                         </div>
                     </div>
                 </div>
 
-                <div style="margin-top: 30px; display: flex; gap: 12px; justify-content: flex-end;">
-                    <button id="btn-close-settings" class="btn-small" style="padding: 12px 24px;">Chiudi</button>
-                    <button id="btn-save-settings" class="btn-primary" style="padding: 12px 28px;">Salva Config</button>
+                <!-- Lightbox -->
+                <div id="lightbox-overlay" class="hidden" onclick="closeLightbox()"
+                    style="position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;justify-content:center;align-items:center;padding:20px;cursor:zoom-out;">
+                    <img id="lightbox-img" src="" alt=""
+                        style="max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;box-shadow:0 30px 60px rgba(0,0,0,0.5);"
+                        onclick="event.stopPropagation()" />
+                    <button onclick="closeLightbox()"
+                        style="position:fixed;top:20px;right:20px;background:rgba(255,255,255,0.1);border:none;color:white;font-size:1.5rem;width:44px;height:44px;border-radius:50%;cursor:pointer;backdrop-filter:blur(10px);">✕</button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Create Project Modal -->
-        <div id="modal-project" class="modal-overlay hidden">
-            <div class="glass-card modal-content fade-in" style="max-width: 420px; width: 100%; padding: 40px;">
-                <h2 style="margin-bottom: 5px;">Nuovo Progetto</h2>
-                <p style="font-size: 0.9rem; margin-bottom: 30px;">Crea un progetto di stile da condividere.</p>
-                <div class="input-group">
-                    <div>
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Nome
-                            Progetto</label>
-                        <input type="text" id="new-project-name" placeholder="es. Branding Studio XYZ"
-                            style="width: 100%;" />
-                    </div>
-                    <div>
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.9rem;">Password
-                            Utente</label>
-                        <input type="text" id="new-project-pass" placeholder="Password per l'utente"
-                            style="width: 100%;" />
-                    </div>
-                </div>
-                <div style="margin-top: 30px; display: flex; gap: 12px; justify-content: flex-end;">
-                    <button id="btn-cancel" class="btn-small" style="padding: 12px 24px;">Annulla</button>
-                    <button id="btn-save-project" class="btn-primary" style="padding: 12px 28px;">Crea Progetto</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Lightbox -->
-        <div id="lightbox-overlay" class="hidden" onclick="closeLightbox()"
-            style="position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;justify-content:center;align-items:center;padding:20px;cursor:zoom-out;">
-            <img id="lightbox-img" src="" alt=""
-                style="max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;box-shadow:0 30px 60px rgba(0,0,0,0.5);"
-                onclick="event.stopPropagation()" />
-            <button onclick="closeLightbox()"
-                style="position:fixed;top:20px;right:20px;background:rgba(255,255,255,0.1);border:none;color:white;font-size:1.5rem;width:44px;height:44px;border-radius:50%;cursor:pointer;backdrop-filter:blur(10px);">✕</button>
-        </div>
 
     </div>
 
