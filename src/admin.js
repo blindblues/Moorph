@@ -10,87 +10,49 @@ async function copyToClipboard(text) {
     }
     const ta = document.createElement('textarea');
     ta.value = text;
-    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px;';
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
     document.body.appendChild(ta);
     ta.focus();
     ta.select();
-    try {
-        document.execCommand('copy');
-    } finally {
-        document.body.removeChild(ta);
-    }
+    document.execCommand('copy');
+    document.body.removeChild(ta);
 }
 
-// --- Admin Data Management (URL Only) ---
+// --- Admin Data Management (Lightweight) ---
 const AdminData = {
     async getProjects() {
-        const local = JSON.parse(localStorage.getItem('moorph_projects') || '[]');
         try {
             const querySnapshot = await getDocs(collection(db, 'projects'));
-            const remote = querySnapshot.docs.map(doc => doc.data());
-            const merged = remote;
-            this.saveProjects(merged);
-            return merged;
+            const proj = querySnapshot.docs.map(doc => doc.data());
+            localStorage.setItem('moorph_projects', JSON.stringify(proj.map(({ images, ...m }) => m)));
+            return proj;
         } catch (e) {
-            console.error('Errore sync progetti:', e);
-            return local;
+            return JSON.parse(localStorage.getItem('moorph_projects') || '[]');
         }
     },
-    saveProjects(projects) {
-        const cleanProjects = projects.map(p => {
-            const { images, ...meta } = p;
-            return meta;
+    async deleteProject(id) {
+        await deleteDoc(doc(db, 'projects', id));
+    },
+    async syncProject(project) {
+        await setDoc(doc(db, 'projects', project.id), {
+            ...project,
+            updatedAt: new Date().toISOString()
         });
-        localStorage.setItem('moorph_projects', JSON.stringify(cleanProjects));
-    },
-    async deleteProject(projectId) {
-        try {
-            await deleteDoc(doc(db, 'projects', projectId));
-        } catch (e) {
-            console.error('Errore durante l\'eliminazione da Firebase:', e);
-        }
-    },
-    async syncProjectToFirebase(project) {
-        try {
-            // IMAGES ARE NOW SAVED DIRECTLY IN THE PROJECT OBJECT AS URLs
-            await setDoc(doc(db, 'projects', project.id), {
-                ...project,
-                updatedAt: new Date().toISOString()
-            });
-        } catch (e) {
-            console.error('Errore durante il sync con Firebase:', e);
-        }
     },
     async getResults(projectId) {
-        try {
-            const q = query(
-                collection(db, 'results'),
-                where('projectId', '==', projectId)
-            );
-            const querySnapshot = await getDocs(q);
-            return querySnapshot.docs
-                .map(d => ({ id: d.id, ...d.data() }))
-                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        } catch (e) {
-            console.error('Errore nel recupero dei risultati:', e);
-            return [];
-        }
+        const q = query(collection(db, 'results'), where('projectId', '==', projectId));
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({ id: d.id, ...d.data() }))
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     },
-    async deleteResult(resultId) {
-        try {
-            await deleteDoc(doc(db, 'results', resultId));
-            return true;
-        } catch (e) {
-            console.error('Errore durante l\'eliminazione del risultato:', e);
-            return false;
-        }
+    async deleteResult(id) {
+        await deleteDoc(doc(db, 'results', id));
     }
 };
 
 let activeProject = null;
 let selectedImages = new Set();
 
-// --- DOM Elements ---
 const el = {
     sidebar: document.getElementById('admin-sidebar'),
     projectList: document.getElementById('project-list'),
@@ -105,7 +67,6 @@ const el = {
     btnAddUrl: document.getElementById('btn-add-url')
 };
 
-// --- Initialization ---
 async function init() {
     await renderProjectList();
     setupEventListeners();
@@ -114,11 +75,11 @@ async function init() {
 async function renderProjectList() {
     const projects = await AdminData.getProjects();
     el.projectList.innerHTML = projects.map(p => `
-    <li class="project-item ${activeProject?.id === p.id ? 'active' : ''}" onclick="selectProject('${p.id}')">
-      <h3>${p.name || 'Senza nome'}</h3>
-      <p>ID: ${p.id}</p>
-    </li>
-  `).join('');
+        <li class="project-item ${activeProject?.id === p.id ? 'active' : ''}" onclick="selectProject('${p.id}')">
+            <h3>${p.name || 'Senza nome'}</h3>
+            <p style="font-size:0.7rem; opacity:0.6;">ID: ${p.id}</p>
+        </li>
+    `).join('');
 }
 
 window.selectProject = async (id) => {
@@ -128,8 +89,6 @@ window.selectProject = async (id) => {
 
     selectedImages.clear();
     updateBulkBar();
-
-    // Images are now part of project metadata in this version
     activeProject.images = activeProject.images || [];
 
     el.emptyState.classList.add('hidden');
@@ -144,9 +103,7 @@ window.selectProject = async (id) => {
     document.getElementById('detail-id').innerText = activeProject.id;
     document.getElementById('edit-password').value = activeProject.password || '';
     document.getElementById('image-count').innerText = `${activeProject.images.length} immagini`;
-
-    const shortUrl = `${window.location.origin}/?s=${activeProject.id}`;
-    document.getElementById('share-link-input').value = shortUrl;
+    document.getElementById('share-link-input').value = `${window.location.origin}/?s=${activeProject.id}`;
 
     renderImages();
     await renderResults();
@@ -154,18 +111,15 @@ window.selectProject = async (id) => {
 };
 
 function renderImages() {
-    if (!activeProject.images || activeProject.images.length === 0) {
-        el.imageGrid.innerHTML = '<p style="color:var(--text-dim); grid-column: 1/-1; text-align: center; padding: 40px;">Nessuna immagine in questo progetto.</p>';
+    if (!activeProject.images?.length) {
+        el.imageGrid.innerHTML = '<p style="grid-column:1/-1;text-align:center;padding:40px;opacity:0.5;">Nessuna immagine.</p>';
         return;
     }
     el.imageGrid.innerHTML = activeProject.images.map((img, idx) => {
-        const isSelected = selectedImages.has(img);
+        const sel = selectedImages.has(img);
         return `
-            <div class="image-card ${isSelected ? 'selected' : ''}" onclick="toggleImageSelection('${img.replace(/'/g, "\\'")}')">
-                <img src="${img}" style="pointer-events:none;" onerror="this.src='/vite.svg'; this.style.opacity=0.3;" />
-                <div class="selection-overlay">
-                    <div class="checkbox ${isSelected ? 'checked' : ''}"></div>
-                </div>
+            <div class="image-card ${sel ? 'selected' : ''}" onclick="toggleImageSelection('${img.replace(/'/g, "\\'")}')">
+                <img src="${img}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.opacity=0.2" />
                 <button class="remove-btn" onclick="event.stopPropagation(); removeImage(${idx})">×</button>
             </div>
         `;
@@ -173,233 +127,126 @@ function renderImages() {
 }
 
 window.toggleImageSelection = (url) => {
-    if (selectedImages.has(url)) {
-        selectedImages.delete(url);
-    } else {
-        selectedImages.add(url);
-    }
+    selectedImages.has(url) ? selectedImages.delete(url) : selectedImages.add(url);
     updateBulkBar();
     renderImages();
 };
 
 function updateBulkBar() {
-    if (selectedImages.size > 0) {
-        el.bulkActionsBar.classList.remove('hidden');
-        el.bulkActionsBar.style.display = 'flex';
-        el.selectedCount.innerText = `${selectedImages.size} selezionati`;
-    } else {
-        el.bulkActionsBar.classList.add('hidden');
-        el.bulkActionsBar.style.display = 'none';
-    }
+    const show = selectedImages.size > 0;
+    el.bulkActionsBar.classList.toggle('hidden', !show);
+    el.selectedCount.innerText = `${selectedImages.size} selezionati`;
 }
 
-let lightboxCleanup = null;
-window.openLightbox = (src) => {
-    const overlay = document.getElementById('lightbox-overlay');
-    const img = document.getElementById('lightbox-img');
-    img.src = src;
-    overlay.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-    if (lightboxCleanup) lightboxCleanup();
-    lightboxCleanup = makeZoomable(img, overlay);
-};
-
-window.closeLightbox = () => {
-    const overlay = document.getElementById('lightbox-overlay');
-    overlay.classList.add('hidden');
-    document.body.style.overflow = '';
-    if (lightboxCleanup) { lightboxCleanup(); lightboxCleanup = null; }
-};
-
+// Results Utility
 async function renderResults() {
-    const allSubmissions = await AdminData.getResults(activeProject.id);
-    if (allSubmissions.length === 0) {
-        el.resultsSummary.innerHTML = '<p style="color:var(--text-dim)">Ancora nessun risultato ricevuto.</p>';
+    const results = await AdminData.getResults(activeProject.id);
+    if (!results.length) {
+        el.resultsSummary.innerHTML = '<p style="opacity:0.5;">Nessun risultato.</p>';
         return;
     }
-
-    el.resultsSummary.innerHTML = allSubmissions.map((submission, sIdx) => {
-        const liked = submission.data.filter(r => r.liked);
-        const disliked = submission.data.filter(r => !r.liked);
-        const date = new Date(submission.timestamp).toLocaleString('it-IT');
-        return `
-            <div class="result-card" id="submission-${submission.id}">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;">
-                    <div>
-                        <strong style="font-size:1.1rem;">👤 Utente ${allSubmissions.length - sIdx}</strong>
-                        <div style="font-size:0.85rem; color:var(--text-dim); margin-top:4px;">${date}</div>
-                    </div>
-                    <button onclick="deleteSubmission('${submission.id}')" class="btn-small" style="background:rgba(255,0,110,0.1); border-color:rgba(255,0,110,0.2); color:#ff4d94; padding:8px 12px; font-size:0.75rem;">
-                        🗑 Elimina Report
-                    </button>
+    el.resultsSummary.innerHTML = results.map((res, i) => `
+        <div class="result-card">
+            <div style="display:flex;justify-content:space-between;margin-bottom:15px;font-size:0.9rem;">
+                <strong>👤 Utente ${results.length - i}</strong>
+                <button onclick="deleteSubmission('${res.id}')" style="background:none;border:none;color:var(--accent);cursor:pointer;">Elimina</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;">
+                <div>
+                   <label style="color:#00ffa3;font-size:0.7rem;display:block;margin-bottom:5px;">LIKE</label>
+                   <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                     ${res.data.filter(x => x.liked).map(x => `<img src="${x.image}" onclick="window.open('${x.image}')"  style="width:35px;height:35px;object-fit:cover;border-radius:6px;cursor:pointer;" />`).join('')}
+                   </div>
                 </div>
-                
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                    <!-- LIKE COLUMN -->
-                    <div>
-                        <h4 style="color:#00ffa3; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-                            <span style="background:rgba(0,255,163,0.15); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px;">✓</span>
-                            Mi piace (${liked.length})
-                        </h4>
-                        <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                            ${liked.map(r => `<img src="${r.image}" onclick="openLightbox('${r.image.replace(/'/g, "\\'")}')" style="width:45px; height:45px; object-fit:cover; border-radius:10px; border:1px solid rgba(0,255,163,0.3); cursor:pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" />`).join('')}
-                            ${liked.length === 0 ? '<p style="font-size:0.75rem; color:var(--text-dim);">Nessun like</p>' : ''}
-                        </div>
-                    </div>
-
-                    <!-- DISLIKE COLUMN -->
-                    <div>
-                        <h4 style="color:#ff006e; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-                            <span style="background:rgba(255,0,110,0.15); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px;">✕</span>
-                            Non piace (${disliked.length})
-                        </h4>
-                        <div style="display:flex; flex-wrap:wrap; gap:8px;">
-                            ${disliked.map(r => `<img src="${r.image}" onclick="openLightbox('${r.image.replace(/'/g, "\\'")}')" style="width:45px; height:45px; object-fit:cover; border-radius:10px; border:1px solid rgba(255,0,110,0.3); opacity:0.6; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.transform='scale(1.1)'; this.style.opacity='1'" onmouseout="this.style.transform='scale(1)'; this.style.opacity='0.6'" />`).join('')}
-                            ${disliked.length === 0 ? '<p style="font-size:0.75rem; color:var(--text-dim);">Nessun dislike</p>' : ''}
-                        </div>
-                    </div>
+                <div>
+                   <label style="color:var(--accent);font-size:0.7rem;display:block;margin-bottom:5px;">NOPE</label>
+                   <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                     ${res.data.filter(x => !x.liked).map(x => `<img src="${x.image}"  style="width:35px;height:35px;object-fit:cover;border-radius:6px;opacity:0.4;" />`).join('')}
+                   </div>
                 </div>
             </div>
-        `;
-    }).join('');
+        </div>
+    `).join('');
 }
 
 window.deleteSubmission = async (id) => {
-    if (confirm('Sei sicuro di voler eliminare definitivamente questo report?')) {
-        const success = await AdminData.deleteResult(id);
-        if (success) {
-            await renderResults();
-        } else {
-            alert('Errore durante l\'eliminazione del report.');
-        }
+    if (confirm('Eliminare questo report?')) {
+        await AdminData.deleteResult(id);
+        await renderResults();
     }
 };
 
-// --- Actions ---
 window.removeImage = async (idx) => {
-    if (confirm('Rimuovere questa immagine dal progetto?')) {
+    if (confirm('Rimuovere immagine?')) {
         activeProject.images.splice(idx, 1);
         await updateActiveProject();
     }
 };
 
 async function updateActiveProject() {
-    const projects = await AdminData.getProjects();
-    const idx = projects.findIndex(p => p.id === activeProject.id);
-    projects[idx] = activeProject;
-    AdminData.saveProjects(projects);
-    await AdminData.syncProjectToFirebase(activeProject);
-    document.getElementById('image-count').innerText = `${activeProject.images.length} immagini`;
+    await AdminData.syncProject(activeProject);
     renderImages();
-    await renderProjectList();
+    document.getElementById('image-count').innerText = `${activeProject.images.length} immagini`;
 }
 
 function setupEventListeners() {
-    document.getElementById('btn-back').addEventListener('click', () => {
+    document.getElementById('btn-back').onclick = () => {
         el.projectDetail.classList.add('hidden');
         el.sidebar.classList.remove('hidden-mobile');
         activeProject = null;
-        renderProjectList();
-    });
+    };
 
-    document.getElementById('btn-create-project').addEventListener('click', () => {
-        el.modalProject.classList.remove('hidden');
-    });
+    document.getElementById('btn-create-project').onclick = () => el.modalProject.classList.remove('hidden');
+    document.getElementById('btn-cancel').onclick = () => el.modalProject.classList.add('hidden');
 
-    document.getElementById('btn-cancel').addEventListener('click', () => {
-        el.modalProject.classList.add('hidden');
-    });
-
-    document.getElementById('btn-save-project').addEventListener('click', async () => {
+    document.getElementById('btn-save-project').onclick = async () => {
         const name = document.getElementById('new-project-name').value.trim();
         const pass = document.getElementById('new-project-pass').value.trim();
-        if (!name || !pass) return alert('Inserisci nome e password');
+        if (!name || !pass) return;
 
-        const newProject = {
-            id: Math.random().toString(36).substr(2, 6),
-            name,
-            password: pass,
-            images: []
-        };
-
-        const projects = await AdminData.getProjects();
-        projects.push(newProject);
-        AdminData.saveProjects(projects);
-        await AdminData.syncProjectToFirebase(newProject);
-
-        document.getElementById('new-project-name').value = '';
-        document.getElementById('new-project-pass').value = '';
+        const p = { id: Math.random().toString(36).substr(2, 6), name, password: pass, images: [] };
+        await AdminData.syncProject(p);
         el.modalProject.classList.add('hidden');
         await renderProjectList();
-        await selectProject(newProject.id);
-    });
+        await selectProject(p.id);
+    };
 
-    document.getElementById('btn-delete-project').addEventListener('click', async () => {
-        if (!confirm('Sei sicuro di voler eliminare questo progetto?')) return;
+    document.getElementById('btn-delete-project').onclick = async () => {
+        if (!confirm('Eliminare progetto?')) return;
         await AdminData.deleteProject(activeProject.id);
-        const projects = await AdminData.getProjects();
-        const filtered = projects.filter(p => p.id !== activeProject.id);
-        AdminData.saveProjects(filtered);
         activeProject = null;
         el.projectDetail.classList.add('hidden');
         el.emptyState.classList.remove('hidden');
         await renderProjectList();
-    });
+    };
 
-    document.getElementById('btn-copy-url').addEventListener('click', async () => {
-        const btn = document.getElementById('btn-copy-url');
-        const originalText = btn.innerText;
-        const input = document.getElementById('share-link-input');
-        input.select();
-        try {
-            await copyToClipboard(input.value);
-            btn.innerText = '✅ Copiato!';
-            setTimeout(() => btn.innerText = originalText, 2000);
-        } catch (e) {
-            btn.innerText = '⚠️ Errore';
-            setTimeout(() => btn.innerText = originalText, 2000);
-        }
-    });
+    document.getElementById('btn-copy-url').onclick = async () => {
+        await copyToClipboard(document.getElementById('share-link-input').value);
+        alert('Link copiato!');
+    };
 
-    // --- URL IMAGE ADDITION ---
-    el.btnAddUrl.addEventListener('click', async () => {
+    el.btnAddUrl.onclick = async () => {
         const url = el.imageUrlInput.value.trim();
-        if (!url) return;
-        if (!activeProject) return alert('Seleziona un progetto prima.');
-
+        if (!url || !activeProject) return;
         activeProject.images.push(url);
         el.imageUrlInput.value = '';
         await updateActiveProject();
-    });
+    };
 
-    el.imageUrlInput.addEventListener('keypress', async (e) => {
-        if (e.key === 'Enter') {
-            el.btnAddUrl.click();
-        }
-    });
+    document.getElementById('btn-select-all').onclick = () => {
+        activeProject.images.forEach(i => selectedImages.add(i));
+        updateBulkBar(); renderImages();
+    };
 
-    // --- BULK ACTIONS ---
-    document.getElementById('btn-select-all').addEventListener('click', () => {
-        activeProject.images.forEach(img => selectedImages.add(img));
-        updateBulkBar();
-        renderImages();
-    });
+    document.getElementById('btn-deselect-all').onclick = () => {
+        selectedImages.clear(); updateBulkBar(); renderImages();
+    };
 
-    document.getElementById('btn-deselect-all').addEventListener('click', () => {
-        selectedImages.clear();
-        updateBulkBar();
-        renderImages();
-    });
-
-    document.getElementById('btn-delete-selected').addEventListener('click', async () => {
-        const count = selectedImages.size;
-        if (!confirm(`Rimuovere ${count} immagini dal progetto?`)) return;
-
-        activeProject.images = activeProject.images.filter(img => !selectedImages.has(img));
-        selectedImages.clear();
-        updateBulkBar();
-        await updateActiveProject();
-    });
+    document.getElementById('btn-delete-selected').onclick = async () => {
+        if (!confirm(`Rimuovere ${selectedImages.size} immagini?`)) return;
+        activeProject.images = activeProject.images.filter(i => !selectedImages.has(i));
+        selectedImages.clear(); updateBulkBar(); await updateActiveProject();
+    };
 }
 
 init();
