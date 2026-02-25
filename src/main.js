@@ -237,6 +237,7 @@ async function renderCards(initial = false) {
   updateProgress();
 }
 
+let fullscreenCleanup = null;
 function openFullscreen(src) {
   const topCard = document.querySelector('.tinder-card:not(.bg-stack)');
   const draggable = Draggable.get(topCard);
@@ -244,9 +245,16 @@ function openFullscreen(src) {
 
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;cursor:zoom-out;user-select:none;touch-action:none;';
-  overlay.innerHTML = `<img src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);transform:scale(0.9);pointer-events:none;" />`;
+  overlay.innerHTML = `
+    <img id="fullscreen-img" src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);transform:scale(0.9);" />
+    <button id="close-fs" style="position:fixed;top:20px;right:20px;background:rgba(255,255,255,0.1);border:none;color:white;font-size:1.5rem;width:44px;height:44px;border-radius:50%;cursor:pointer;backdrop-filter:blur(10px);z-index:2;">✕</button>
+    <div style="position:fixed;bottom:30px;left:0;right:0;text-align:center;color:rgba(255,255,255,0.4);font-size:0.8rem;pointer-events:none;">Pizzica per zoomare • Doppio tap per resettare</div>
+  `;
+
+  const img = overlay.querySelector('#fullscreen-img');
 
   const close = () => {
+    if (fullscreenCleanup) { fullscreenCleanup(); fullscreenCleanup = null; }
     gsap.to(overlay, {
       opacity: 0, duration: 0.3, onComplete: () => {
         overlay.remove();
@@ -256,12 +264,12 @@ function openFullscreen(src) {
     document.body.style.overflow = '';
   };
 
-  overlay.onclick = close;
+  overlay.onclick = (e) => { if (e.target === overlay || e.target.id === 'close-fs') close(); };
   document.body.appendChild(overlay);
   document.body.style.overflow = 'hidden';
 
   gsap.to(overlay, { opacity: 1, duration: 0.3 });
-  gsap.to(overlay.querySelector('img'), { scale: 1, duration: 0.4, ease: 'back.out(1.7)' });
+  fullscreenCleanup = makeZoomable(img, overlay);
 }
 
 function setupDraggable() {
