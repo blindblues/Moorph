@@ -461,31 +461,23 @@ function setupEventListeners() {
 // --- Pinterest Fetcher ---
 async function fetchPinterestImages(boardUrl) {
     const normalized = boardUrl.replace(/\/?$/, '/');
+    const boardPath = new URL(normalized).pathname;
+    const status = document.getElementById('pinterest-status');
 
-    const proxies = [
-        async (url) => {
-            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(10000) });
-            const d = await r.json();
-            return d.contents;
-        },
-        async (url) => {
-            const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(10000) });
-            return r.text();
-        },
-        async (url) => {
-            const r = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(10000) });
-            return r.text();
+    async function proxyFetch(url) {
+        const tries = [
+            async () => { const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(12000) }); const d = await r.json(); return d.contents ?? null; },
+            async () => { const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(12000) }); return r.text(); },
+        ];
+        for (const fn of tries) {
+            try { const res = await fn(); if (res) return res; } catch { continue; }
         }
-    ];
-
-    let html = null;
-    for (const tryProxy of proxies) {
-        try {
-            const result = await tryProxy(normalized);
-            if (result && result.includes('pinimg')) { html = result; break; }
-        } catch { continue; }
+        return null;
     }
 
+    // 1. Load initial board page
+    status && (status.innerText = '⏳ Caricamento bacheca...');
+    const html = await proxyFetch(normalized);
     if (!html) {
         const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
         throw new Error(isLocal
@@ -493,32 +485,48 @@ async function fetchPinterestImages(boardUrl) {
             : 'Tutti i proxy non disponibili. Riprova tra qualche secondo.');
     }
 
-    // Unescape JSON-encoded backslashes: https:\/\/i.pinimg.com\/...
-    const clean = html.replace(/\\\//g, '/');
+    const clean = html.split('\/').join('/');
 
-    // --- Strategy 1: CSS class-based (precise) ---
-    // Board pins have class "iFOUS5"; related/suggested have "iFOUS5 ALBw9Q"
-    const classUrls = extractBoardPinsFromHtml(clean);
-    if (classUrls.length >= 2) return classUrls;
 
-    // --- Strategy 2: Regex fallback (for older Pinterest versions) ---
-    const allUrls = [...clean.matchAll(
-        /https:\/\/i\.pinimg\.com\/(?:736x|originals|564x|474x)\/[\w\/\-]{10,}\.jpg/g
-    )].map(m => m[0]);
+    const allPinUrls = new Set(extractBoardPinsFromHtml(clean));
 
-    // Deduplicate by filename — keep highest resolution
-    const PRIORITY = { originals: 5, '736x': 4, '564x': 3, '474x': 2, '236x': 1 };
-    const bestByHash = new Map();
-    for (const url of allUrls) {
-        const filename = url.split('/').pop();
-        const size = url.match(/pinimg\.com\/([\w]+)\//)?.[1] || '';
-        const prio = PRIORITY[size] || 0;
-        if (!bestByHash.has(filename) || prio > bestByHash.get(filename).prio) {
-            bestByHash.set(filename, { url, prio });
-        }
+    // 2. Extract pagination bookmark from embedded JSON
+    const bmMatch = clean.match(/"bookmarks"\s*:\s*\["([^"]+)"\]/);
+    let bookmark = bmMatch?.[1] ?? null;
+
+    // 3. Paginate via Pinterest's BoardFeedResource API (no auth needed for public boards)
+    let page = 1;
+    while (bookmark && page < 9) {
+        page++;
+        status && (status.innerText = `⏳ Caricamento pagina ${page}...`);
+
+        const options = JSON.stringify({
+            options: { board_url: boardPath, bookmarks: [bookmark], page_size: 25, field_set_key: 'grid_item' },
+            context: {}
+        });
+        const apiUrl = `https://www.pinterest.com/resource/BoardFeedResource/get/?data=${encodeURIComponent(options)}`;
+
+        const raw = await proxyFetch(apiUrl);
+        if (!raw) break;
+
+        try {
+            // allorigins sometimes double-wraps the JSON response
+            let parsed;
+            try { parsed = JSON.parse(raw); } catch { break; }
+            if (typeof parsed === 'string') parsed = JSON.parse(parsed);
+
+            const data = parsed?.resource_response?.data ?? [];
+            for (const pin of data) {
+                const imgs = pin?.images;
+                if (!imgs) continue;
+                const best = imgs['736x'] ?? imgs['474x'] ?? imgs['564x'] ?? imgs['236x'];
+                if (best?.url) allPinUrls.add(best.url);
+            }
+            bookmark = parsed?.resource_response?.bookmark ?? null;
+        } catch { break; }
     }
 
-    return [...bestByHash.values()].map(v => v.url);
+    return [...allPinUrls];
 }
 
 // --- Pinterest extraction: use CSS class as selector ---
