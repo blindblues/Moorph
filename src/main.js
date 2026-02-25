@@ -44,17 +44,12 @@ const DataManager = {
   },
   async saveResult(projectId, results) {
     try {
-      // Save to Firebase
+      // Save to Firebase - This is the primary storage
       await addDoc(collection(db, 'results'), {
         projectId: projectId,
         timestamp: new Date().toISOString(),
         data: results
       });
-
-      // Maintain local copy
-      const allResults = JSON.parse(localStorage.getItem('moorph_results') || '{}');
-      allResults[projectId] = results;
-      localStorage.setItem('moorph_results', JSON.stringify(allResults));
     } catch (e) {
       console.error('Errore nel salvataggio su Firebase:', e);
     }

@@ -20,9 +20,13 @@
 
         <header class="admin-header glass-card">
             <div class="logo">Moorph Admin</div>
-            <button id="btn-create-project" class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem;">
-                + Nuovo Progetto
-            </button>
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <button id="btn-settings" class="btn-small"
+                    style="background: rgba(255,255,255,0.05); padding: 10px 15px;">⚙️ GitHub</button>
+                <button id="btn-create-project" class="btn-primary" style="padding: 12px 24px; font-size: 0.95rem;">
+                    + Nuovo Progetto
+                </button>
+            </div>
         </header>
 
         <main class="admin-main">
@@ -84,8 +88,16 @@
                     <div
                         style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                         <h2 style="margin: 0; font-size: 1.3rem; font-weight: 700;">🖼 Galleria Immagini</h2>
-                        <p id="image-count" style="font-size: 0.85rem; color: var(--text-dim);"></p>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <p id="image-count" style="font-size: 0.85rem; color: var(--text-dim); margin: 0;"></p>
+                            <button id="btn-sync-folder" class="btn-small"
+                                style="font-size: 0.75rem; padding: 6px 12px; background: rgba(58, 134, 255, 0.1); color: var(--secondary); border: 1px solid rgba(58, 134, 255, 0.2);">🛸
+                                Sincronizza Cartella</button>
+                        </div>
                     </div>
+                    <p id="local-folder-info"
+                        style="font-size: 0.75rem; color: var(--text-dim); margin-bottom: 15px; background: rgba(0,0,0,0.2); padding: 8px 12px; border-radius: 8px; font-family: monospace; display: none;">
+                    </p>
 
 
                     <div class="upload-area glass-card" id="drop-zone">
@@ -120,6 +132,42 @@
                 </div>
             </section>
         </main>
+
+        <!-- GitHub Settings Modal -->
+        <div id="modal-settings" class="modal-overlay hidden">
+            <div class="glass-card modal-content fade-in" style="max-width: 480px; width: 100%; padding: 40px;">
+                <h2 style="margin-bottom: 5px;">Configurazione GitHub</h2>
+                <p style="font-size: 0.9rem; margin-bottom: 25px; color: var(--text-dim);">Necessaria per salvare le
+                    immagini direttamente nella repository quando sei online.</p>
+
+                <div class="input-group">
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.85rem;">Token
+                            Accesso Personale (PAT)</label>
+                        <input type="password" id="gh-token" placeholder="ghp_xxxxxxxxxxxx" style="width: 100%;" />
+                        <p style="font-size: 0.7rem; color: var(--secondary); margin-top: 5px; opacity: 0.8;">Crea un
+                            token con permessi 'contents:write' su GitHub.</p>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label
+                                style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.85rem;">Owner</label>
+                            <input type="text" id="gh-owner" placeholder="blindblues" style="width: 100%;" />
+                        </div>
+                        <div>
+                            <label
+                                style="display: block; margin-bottom: 8px; font-weight: 600; font-size: 0.85rem;">Repository</label>
+                            <input type="text" id="gh-repo" placeholder="Moorph" style="width: 100%;" />
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 30px; display: flex; gap: 12px; justify-content: flex-end;">
+                    <button id="btn-close-settings" class="btn-small" style="padding: 12px 24px;">Chiudi</button>
+                    <button id="btn-save-settings" class="btn-primary" style="padding: 12px 28px;">Salva Config</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Create Project Modal -->
         <div id="modal-project" class="modal-overlay hidden">

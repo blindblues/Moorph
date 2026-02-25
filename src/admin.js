@@ -44,7 +44,12 @@ const AdminData = {
         }
     },
     saveProjects(projects) {
-        localStorage.setItem('moorph_projects', JSON.stringify(projects));
+        // Strip images before saving to localStorage projects list to avoid quota limits
+        const cleanProjects = projects.map(p => {
+            const { images, ...meta } = p;
+            return meta;
+        });
+        localStorage.setItem('moorph_projects', JSON.stringify(cleanProjects));
     },
     async deleteProject(projectId) {
         try {
@@ -55,22 +60,33 @@ const AdminData = {
     },
     async syncProjectToFirebase(project) {
         try {
-            // Store only metadata in the main doc (avoid 1MB limit)
+            // 1. Sync metadata to main doc (avoid 1MB limit by excluding images)
             const { images, ...meta } = project;
             await setDoc(doc(db, 'projects', project.id), {
                 ...meta,
                 updatedAt: new Date().toISOString()
             });
 
-            // Store each image as its own document in a sub-collection
-            // First delete existing images sub-collection docs and re-add
+            // 2. Sync images to sub-collection
             const imagesRef = collection(db, 'projects', project.id, 'images');
-            // Add new images that don't exist yet (by checking data URL prefix)
+
+            // Get current images in Firebase to find orphans
+            const existingSnap = await getDocs(imagesRef);
+            const existingIds = existingSnap.docs.map(d => d.id);
+
+            // Write current images
             for (let i = 0; i < images.length; i++) {
                 await setDoc(doc(db, 'projects', project.id, 'images', String(i)), {
                     url: images[i],
                     order: i
                 });
+            }
+
+            // 3. Delete orphans (if images were removed)
+            const newIds = images.map((_, i) => String(i));
+            const orphans = existingIds.filter(id => !newIds.includes(id));
+            for (const id of orphans) {
+                await deleteDoc(doc(db, 'projects', project.id, 'images', id));
             }
         } catch (e) {
             console.error('Errore durante il sync con Firebase:', e);
@@ -107,18 +123,91 @@ const AdminData = {
     // Generate a short URL by saving project data to Firestore
     async generateShareLink(project) {
         try {
-            // Save/Update project definition in Firestore
-            await setDoc(doc(db, 'projects', project.id), {
-                id: project.id,
-                name: project.name,
-                password: project.password,
-                images: project.images,
-                updatedAt: new Date().toISOString()
-            });
+            // Use specialized sync function to ensure sub-collections are correct
+            await this.syncProjectToFirebase(project);
             return `${window.location.origin}/?s=${project.id}`;
         } catch (e) {
             console.error('Errore Firebase:', e);
-            throw e; // Rilanciamo l'errore per gestirlo nel bottone
+            throw e;
+        }
+    },
+    // --- Local Folder API (Local Dev Only) ---
+    async createLocalFolder(id, name) {
+        try {
+            const resp = await fetch(`/api/folders/create?id=${id}&name=${encodeURIComponent(name)}`);
+            return await resp.json();
+        } catch (e) {
+            console.warn('Local API non disponibile (normale in produzione)');
+            return null;
+        }
+    },
+    async getLocalImages(id) {
+        try {
+            const resp = await fetch(`/api/folders/list?id=${id}`);
+            if (!resp.ok) return null;
+            return await resp.json();
+        } catch (e) {
+            return null;
+        }
+    },
+    async uploadLocalImage(projectId, file) {
+        try {
+            const resp = await fetch(`/api/uploads/save?id=${projectId}&name=${encodeURIComponent(file.name)}`, {
+                method: 'POST',
+                body: file
+            });
+            return await resp.json();
+        } catch (e) {
+            return null;
+        }
+    },
+    async uploadToGitHub(projectId, file) {
+        const config = JSON.parse(localStorage.getItem('moorph_gh_config') || '{}');
+        if (!config.token || !config.owner || !config.repo) {
+            console.warn('GitHub Config non completa.');
+            return null;
+        }
+
+        try {
+            const path = `public/projects/${projectId}/${file.name}`;
+            const reader = new FileReader();
+            const content = await new Promise((resolve) => {
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+
+            // 1. Try to get existing file to get SHA (needed for updates, though we usually add new)
+            let sha = null;
+            try {
+                const getResp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`, {
+                    headers: { 'Authorization': `token ${config.token}` }
+                });
+                if (getResp.ok) {
+                    const existing = await getResp.json();
+                    sha = existing.sha;
+                }
+            } catch (e) { }
+
+            // 2. Put file to GitHub
+            const resp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${config.token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    message: `Upload image for project ${projectId} via Moorph Admin`,
+                    content: content,
+                    sha: sha // Only if updating
+                })
+            });
+
+            if (!resp.ok) throw new Error('GitHub API Error');
+            const data = await resp.json();
+            return { success: true, url: `/projects/${projectId}/${file.name}` };
+        } catch (e) {
+            console.error('Errore GitHub upload:', e);
+            return null;
         }
     }
 };
@@ -133,7 +222,9 @@ const el = {
     emptyState: document.getElementById('empty-state'),
     modalProject: document.getElementById('modal-project'),
     imageGrid: document.getElementById('image-grid'),
-    resultsSummary: document.getElementById('results-summary')
+    resultsSummary: document.getElementById('results-summary'),
+    localFolderInfo: document.getElementById('local-folder-info'),
+    modalSettings: document.getElementById('modal-settings')
 };
 
 // --- Initialization ---
@@ -181,6 +272,15 @@ window.selectProject = async (id) => {
     renderImages();
     await renderResults();
     renderProjectList();
+
+    // Check for local folder
+    const local = await AdminData.getLocalImages(id);
+    if (local) {
+        el.localFolderInfo.style.display = 'block';
+        el.localFolderInfo.innerText = `📂 Cartella: public/projects/${id}`;
+    } else {
+        el.localFolderInfo.style.display = 'none';
+    }
 };
 
 function renderImages() {
@@ -304,6 +404,9 @@ function setupEventListeners() {
         AdminData.saveProjects(projects);
         await AdminData.syncProjectToFirebase(newProject);
 
+        // Local folder creation (System requested by user)
+        await AdminData.createLocalFolder(newProject.id, newProject.name);
+
         document.getElementById('new-project-name').value = '';
         document.getElementById('new-project-pass').value = '';
         el.modalProject.classList.add('hidden');
@@ -361,25 +464,26 @@ function setupEventListeners() {
         document.getElementById('file-input').click();
     });
 
-    // Compress image to keep Firestore docs small (free, no Storage needed)
-    function compressImage(file, maxSize = 800, quality = 0.5) {
-        return new Promise((resolve) => {
-            const img = new Image();
-            const url = URL.createObjectURL(file);
-            img.onload = () => {
-                URL.revokeObjectURL(url);
-                const canvas = document.createElement('canvas');
-                let w = img.width, h = img.height;
-                if (w > maxSize || h > maxSize) {
-                    if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
-                    else { w = Math.round(w * maxSize / h); h = maxSize; }
-                }
-                canvas.width = w;
-                canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(canvas.toDataURL('image/jpeg', quality));
-            };
-            img.src = url;
+    // Process image: Try to upload locally (if dev), then GitHub (if configured), then base64
+    async function processImage(file) {
+        // 1. Try Local Upload (Zero compression, works only on localhost)
+        const local = await AdminData.uploadLocalImage(activeProject.id, file);
+        if (local && local.success) {
+            return local.url;
+        }
+
+        // 2. Try GitHub Upload (If configured)
+        const gh = await AdminData.uploadToGitHub(activeProject.id, file);
+        if (gh && gh.success) {
+            return gh.url;
+        }
+
+        // 3. Last fallback: Full-quality Base64
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
         });
     }
 
@@ -388,23 +492,88 @@ function setupEventListeners() {
         if (!files.length) return;
 
         const zone = document.getElementById('drop-zone');
-        zone.querySelector('p').innerText = `Compressione ${files.length} immagini...`;
+        zone.querySelector('p').innerText = `Caricamento ${files.length} immagini...`;
         zone.style.opacity = '0.5';
         zone.style.pointerEvents = 'none';
 
         try {
-            const compressed = await Promise.all(files.map(f => compressImage(f)));
-            activeProject.images.push(...compressed);
+            const results = await Promise.all(files.map(f => processImage(f)));
+            activeProject.images.push(...results);
             await updateActiveProject();
         } catch (err) {
             console.error('Errore upload:', err);
-            alert('Errore durante la compressione delle immagini.');
+            alert('Errore durante il caricamento delle immagini.');
         } finally {
             zone.querySelector('p').innerText = 'Trascina o clicca per caricare';
             zone.style.opacity = '';
             zone.style.pointerEvents = '';
             e.target.value = '';
         }
+    });
+
+    // Local Folder Sync (System requested by user)
+    document.getElementById('btn-sync-folder').addEventListener('click', async () => {
+        const btn = document.getElementById('btn-sync-folder');
+        const originalText = btn.innerText;
+        btn.innerText = '⌛ Sincronizzazione...';
+        btn.disabled = true;
+
+        try {
+            const data = await AdminData.getLocalImages(activeProject.id);
+            if (data && data.images && data.images.length > 0) {
+                // Merge with existing images (avoid duplicates)
+                const current = new Set(activeProject.images);
+                let added = 0;
+                data.images.forEach(img => {
+                    if (!current.has(img)) {
+                        activeProject.images.push(img);
+                        added++;
+                    }
+                });
+
+                if (added > 0) {
+                    await updateActiveProject();
+                    alert(`Sincronizzati ${added} nuovi file dalla cartella locale!`);
+                } else {
+                    alert('Nessuna nuova immagine trovata nella cartella.');
+                }
+            } else {
+                alert('La cartella è vuota o non contiene immagini supportate.\nInserisci i file in: public/projects/' + activeProject.id);
+            }
+        } catch (e) {
+            alert('Errore durante la sincronizzazione locale.');
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    });
+
+    // --- GitHub Settings ---
+    const loadGHConfig = () => {
+        const config = JSON.parse(localStorage.getItem('moorph_gh_config') || '{"owner":"blindblues","repo":"Moorph"}');
+        document.getElementById('gh-token').value = config.token || '';
+        document.getElementById('gh-owner').value = config.owner || '';
+        document.getElementById('gh-repo').value = config.repo || '';
+    };
+
+    document.getElementById('btn-settings').addEventListener('click', () => {
+        loadGHConfig();
+        el.modalSettings.classList.remove('hidden');
+    });
+
+    document.getElementById('btn-close-settings').addEventListener('click', () => {
+        el.modalSettings.classList.add('hidden');
+    });
+
+    document.getElementById('btn-save-settings').addEventListener('click', () => {
+        const config = {
+            token: document.getElementById('gh-token').value.trim(),
+            owner: document.getElementById('gh-owner').value.trim(),
+            repo: document.getElementById('gh-repo').value.trim()
+        };
+        localStorage.setItem('moorph_gh_config', JSON.stringify(config));
+        alert('Configurazione GitHub salvata localmente nel browser!');
+        el.modalSettings.classList.add('hidden');
     });
 
 }
