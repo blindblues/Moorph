@@ -403,16 +403,25 @@ function setupEventListeners() {
     });
 
     // --- PASSWORD UPDATE ---
-    const passInput = document.getElementById('edit-password');
-    passInput.addEventListener('change', async () => {
+    document.getElementById('btn-save-password').addEventListener('click', async () => {
         if (!activeProject) return;
+        const passInput = document.getElementById('edit-password');
         const newPass = passInput.value.trim();
         if (!newPass) return alert('La password non può essere vuota');
+
+        const btn = document.getElementById('btn-save-password');
+        const originalText = btn.innerText;
+        btn.innerText = 'Salvataggio...';
+        btn.disabled = true;
+
         activeProject.password = newPass;
         await updateActiveProject();
-        // Feedback visivo temporaneo
-        passInput.style.borderColor = 'var(--primary)';
-        setTimeout(() => passInput.style.borderColor = '', 1000);
+
+        btn.innerText = '✅ Salvata!';
+        setTimeout(() => {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }, 2000);
     });
 }
 
