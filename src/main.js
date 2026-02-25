@@ -186,7 +186,7 @@ document.getElementById('btn-start').onclick = async () => {
   btn.disabled = true;
 
   try {
-    await renderCards(); // This now waits for the top image
+    await renderCards(true); // This now waits for the top image
     showView('swipe');
   } catch (e) {
     console.error('Errore caricamento:', e);
@@ -206,47 +206,53 @@ async function preloadImage(url) {
   });
 }
 
-async function renderCards() {
+async function renderCards(initial = false) {
   const deck = document.getElementById('card-deck');
   const images = state.currentProject.images;
-
-  if (!images || images.length === 0) return alert('Nessuna immagine.');
-
-  // Render ONLY CURRENT and NEXT to keep DOM light and memory footprint low
-  // This solves Firefox Android loading/crashing issues
-  deck.innerHTML = '';
-  state.cards = [];
+  if (!images || images.length === 0) return;
 
   const maxToRender = Math.min(state.currentIndex + 2, images.length);
 
-  // Preload top image first for maximum stability
-  if (state.currentIndex < images.length) {
-    await preloadImage(images[state.currentIndex]);
-  }
-
+  // Preload only if we are actually adding something new
   for (let i = state.currentIndex; i < maxToRender; i++) {
-    const card = document.createElement('div');
-    card.className = 'tinder-card' + (i > state.currentIndex ? ' bg-stack' : '');
-    card.style.zIndex = images.length - i;
-    card.innerHTML = `<img src="${images[i]}" class="card-image" />`;
-    card.onclick = () => { if (Math.abs(state.dragDistX) < 5) openFullscreen(images[i]); };
-    deck.appendChild(card);
-    state.cards[i] = card;
+    if (!state.cards[i]) {
+      // Create card but keep it hidden/invisible while loading to avoid flash
+      const card = document.createElement('div');
+      card.className = 'tinder-card' + (i > state.currentIndex ? ' bg-stack' : '');
+      card.style.zIndex = images.length - i;
+      card.style.opacity = '0';
+      card.innerHTML = `<img src="${images[i]}" class="card-image" />`;
+      deck.appendChild(card);
+      state.cards[i] = card;
+
+      // Load image then fade in
+      await preloadImage(images[i]);
+      gsap.to(card, { opacity: i > state.currentIndex ? 0.4 : 1, duration: 0.3 });
+    }
   }
 
-  setupDraggable();
+  if (initial) {
+    setupDraggable();
+  }
   updateProgress();
 }
 
 function openFullscreen(src) {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;cursor:zoom-out;';
-  overlay.innerHTML = `<img src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);" />`;
-  overlay.onclick = () => {
+  overlay.innerHTML = `<img src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);transform:scale(0.9);" />`;
+
+  const close = () => {
     gsap.to(overlay, { opacity: 0, duration: 0.3, onComplete: () => overlay.remove() });
+    document.body.style.overflow = '';
   };
+
+  overlay.onclick = close;
   document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+
   gsap.to(overlay, { opacity: 1, duration: 0.3 });
+  gsap.to(overlay.querySelector('img'), { scale: 1, duration: 0.4, ease: 'back.out(1.7)' });
 }
 
 function setupDraggable() {
@@ -262,6 +268,14 @@ function setupDraggable() {
 
   Draggable.create(topCard, {
     type: 'x,y',
+    // Android Fix: Use Draggable's built-in onClick to handle full-screen toggle
+    // This avoids conflicts between touch-drag and simple tap
+    onClick: function () {
+      const idx = Array.from(topCard.parentNode.children).indexOf(topCard);
+      // We need the ACTUAL current index because the DOM might have offset
+      const currentImageUrl = state.currentProject.images[state.currentIndex];
+      openFullscreen(currentImageUrl);
+    },
     onDrag: function () {
       const x = this.x;
       state.dragDistX = x;
@@ -327,7 +341,7 @@ function swipe(direction) {
     rotation: direction === 'right' ? 40 : -40,
     duration: 0.4,
     ease: 'power2.in',
-    onComplete: async () => {
+    onComplete: () => {
       card.remove();
       state.currentIndex++;
       state.isAnimating = false;
@@ -335,7 +349,13 @@ function swipe(direction) {
       updateProgress();
 
       if (state.currentIndex < state.currentProject.images.length) {
-        await renderCards(); // Load next batch
+        const nextFront = document.querySelector('.tinder-card');
+        if (nextFront) {
+          nextFront.classList.remove('bg-stack');
+          gsap.to(nextFront, { scale: 1, filter: 'blur(0px)', y: 0, opacity: 1, duration: 0.4, ease: 'power3.out' });
+        }
+        setupDraggable();
+        renderCards(); // Add next-next card without clearing
       } else {
         finishProject();
       }
