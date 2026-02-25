@@ -267,7 +267,11 @@ const el = {
     localFolderInfo: document.getElementById('local-folder-info'),
     modalSettings: document.getElementById('modal-settings'),
     bulkActionsBar: document.getElementById('bulk-actions-bar'),
-    selectedCount: document.getElementById('selected-count')
+    selectedCount: document.getElementById('selected-count'),
+    uploadPrompt: document.getElementById('upload-prompt'),
+    uploadProgressContainer: document.getElementById('upload-progress-container'),
+    uploadProgressBar: document.getElementById('upload-progress-bar'),
+    uploadStatusText: document.getElementById('upload-status-text')
 };
 
 let selectedImages = new Set();
@@ -588,22 +592,37 @@ function setupEventListeners() {
         if (!files.length) return;
 
         const zone = document.getElementById('drop-zone');
-        zone.querySelector('p').innerText = `Caricamento ${files.length} immagini...`;
-        zone.style.opacity = '0.5';
+        el.uploadPrompt.classList.add('hidden');
+        el.uploadProgressContainer.classList.remove('hidden');
         zone.style.pointerEvents = 'none';
 
         try {
-            const results = await Promise.all(files.map(f => processImage(f)));
+            const results = [];
+            for (let i = 0; i < files.length; i++) {
+                const percent = Math.round(((i) / files.length) * 100);
+                el.uploadProgressBar.style.width = `${percent}%`;
+                el.uploadStatusText.innerText = `Caricamento immagine ${i + 1} di ${files.length}... (${percent}%)`;
+
+                const res = await processImage(files[i]);
+                results.push(res);
+            }
+
+            el.uploadProgressBar.style.width = '100%';
+            el.uploadStatusText.innerText = 'Completato!';
+
             activeProject.images.push(...results);
             await updateActiveProject();
         } catch (err) {
             console.error('Errore upload:', err);
             alert('Errore durante il caricamento delle immagini.');
         } finally {
-            zone.querySelector('p').innerText = 'Trascina o clicca per caricare';
-            zone.style.opacity = '';
-            zone.style.pointerEvents = '';
-            e.target.value = '';
+            setTimeout(() => {
+                el.uploadPrompt.classList.remove('hidden');
+                el.uploadProgressContainer.classList.add('hidden');
+                el.uploadProgressBar.style.width = '0%';
+                zone.style.pointerEvents = '';
+                e.target.value = '';
+            }, 1000);
         }
     });
 

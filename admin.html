@@ -115,6 +115,25 @@
                             style="font-size: 0.75rem; padding: 6px 15px;">🗑 Elimina Selezionati</button>
                     </div>
 
+                    <div class="upload-area glass-card" id="drop-zone">
+                        <div id="upload-prompt">
+                            <p style="color: white; font-weight: 600;">Trascina o clicca per caricare</p>
+                            <p style="font-size: 0.8rem; margin-top: 4px;">PNG, JPG, WEBP supportati</p>
+                        </div>
+                        <div id="upload-progress-container" class="hidden" style="width: 80%;">
+                            <p id="upload-status-text"
+                                style="font-size: 0.9rem; margin-bottom: 10px; font-weight: 600; color: var(--secondary);">
+                                Caricamento...</p>
+                            <div class="progress-container"
+                                style="background: rgba(255,255,255,0.1); border-radius: 10px; height: 8px; overflow: hidden;">
+                                <div id="upload-progress-bar"
+                                    style="width: 0%; height: 100%; background: linear-gradient(to right, var(--primary), var(--secondary)); transition: width 0.3s ease; box-shadow: 0 0 10px var(--secondary-glow);">
+                                </div>
+                            </div>
+                        </div>
+                        <input type="file" id="file-input" multiple class="hidden" />
+                    </div>
+
                     <div id="image-grid" class="image-grid" style="margin-top: 20px;">
                         <!-- Images injected by JS -->
                     </div>
