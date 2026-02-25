@@ -773,8 +773,7 @@ input:focus {
 /* Mobile Swipe Optimization */
 @media (max-width: 480px) {
   .main-header {
-    position: relative;
-    padding: 15px 10px;
+    padding: 15px 20px;
     gap: 8px;
   }
 
@@ -787,12 +786,6 @@ input:focus {
     height: 4px;
   }
 
-  .swipe-container {
-    padding: 5px;
-    flex: 1;
-    display: flex;
-    align-items: center;
-  }
 
   .card-deck {
     width: 100%;
@@ -800,10 +793,7 @@ input:focus {
   }
 
   .swipe-footer {
-    padding-bottom: 20px;
-    gap: 15px;
-    margin-top: auto;
-    /* Push footer to bottom */
+    padding-bottom: 30px;
   }
 
   .btn-round {
