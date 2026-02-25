@@ -487,8 +487,7 @@ async function fetchPinterestImages(boardUrl) {
 
     const clean = html.split('\/').join('/');
 
-
-    const allPinUrls = new Set(extractBoardPinsFromHtml(clean));
+    const allPinUrls = new Set(extractFromPwsData(clean));
 
     // 2. Extract pagination bookmark from embedded JSON
     const bmMatch = clean.match(/"bookmarks"\s*:\s*\["([^"]+)"\]/);
@@ -529,40 +528,53 @@ async function fetchPinterestImages(boardUrl) {
     return [...allPinUrls];
 }
 
-// --- Pinterest extraction: use CSS class as selector ---
-// Board pins: class="iFOUS5" (no ALBw9Q)
-// Related/suggested pins: class="iFOUS5 ALBw9Q"
-function extractBoardPinsFromHtml(html) {
-    const result = new Set();
-    let idx = 0;
+// --- Pinterest extraction via __PWS_DATA__ JSON ---
+// Pinterest's SSR page includes a <script id="__PWS_DATA__"> tag with all initial board pin data.
+// We parse it and extract images from pin objects (which always have an 'images' property
+// containing {url, width, height} per resolution). Known non-board sections are skipped.
+function extractFromPwsData(html) {
+    // Find __PWS_DATA__ script (most reliable; exists in both old and new Pinterest)
+    const m = html.match(/<script[^>]+id=["']?__PWS_DATA__["']?[^>]*>([\s\S]*?)<\/script>/);
+    if (!m) return extractPinImgUrls(html); // fallback to regex scan
 
-    while (true) {
-        const pos = html.indexOf('iFOUS5', idx);
-        if (pos === -1) break;
-        idx = pos + 1;
+    let data;
+    try { data = JSON.parse(m[1]); } catch { return extractPinImgUrls(html); }
 
-        // Check if this occurrence is a related pin (ALBw9Q appears within 60 chars)
-        const context60 = html.substring(pos, pos + 60);
-        if (context60.includes('ALBw9Q')) continue; // Skip – related pin
+    const results = [];
+    const EXCLUDED = new Set(['relatedPins', 'related_pins', 'relatedBoards', 'related_boards',
+        'moreIdeas', 'more_ideas', 'recommendedPins', 'recommended_pins', 'shuffledFeed',
+        'homefeed', 'interestFeed', 'smartFeed']);
 
-        // Extract image URL from the next 600 chars of this board-pin block
-        const segment = html.substring(pos, pos + 600);
-
-        // Try srcset first (has larger resolutions like 474x)
-        const srcsetMatch = segment.match(/srcset="([^"]+)"/);
-        if (srcsetMatch) {
-            // srcset format: "url1 1x, url2 2x" — take the last / highest res one
-            const parts = srcsetMatch[1].split(',').map(s => s.trim().split(' ')[0]);
-            const best = parts.filter(u => u.includes('pinimg.com')).pop();
-            if (best) { result.add(best); continue; }
+    function walk(node, depth) {
+        if (depth > 12 || !node || typeof node !== 'object') return;
+        if (Array.isArray(node)) {
+            // If this array's items have an 'images' property → board pin array
+            if (node.length > 1 && node[0]?.images) {
+                for (const pin of node) {
+                    const imgs = pin?.images;
+                    if (!imgs) continue;
+                    const best = imgs['736x'] ?? imgs['originals'] ?? imgs['474x'] ?? imgs['564x'] ?? imgs['236x'];
+                    if (best?.url && best.url.includes('pinimg')) results.push(best.url);
+                }
+                return;
+            }
+            for (const c of node) walk(c, depth + 1);
+        } else {
+            for (const [k, v] of Object.entries(node)) {
+                if (EXCLUDED.has(k)) continue;
+                walk(v, depth + 1);
+            }
         }
-
-        // Fallback: plain src attribute
-        const srcMatch = segment.match(/src="(https:\/\/i\.pinimg\.com\/[^"]+\.jpg)"/);
-        if (srcMatch) result.add(srcMatch[1]);
     }
 
-    return [...result];
+    walk(data, 0);
+    return results;
+}
+
+// Fallback: plain regex scan for pinimg URLs when __PWS_DATA__ is absent
+function extractPinImgUrls(html) {
+    return [...html.matchAll(/https:\/\/i\.pinimg\.com\/(?:736x|originals|474x|564x)\/[\w\/-]{10,}\.jpg/g)]
+        .map(m => m[0]);
 }
 
 function openPinterestModal(images) {
