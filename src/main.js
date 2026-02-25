@@ -283,7 +283,7 @@ function openFullscreen(src) {
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;cursor:zoom-out;user-select:none;touch-action:none;';
   overlay.innerHTML = `
     <img id="fullscreen-img" src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);transform:scale(0.9);" />
-    <button id="close-fs" style="position:fixed;top:30px;right:30px;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.4);color:white;font-size:2rem;width:60px;height:60px;border-radius:50%;cursor:pointer;backdrop-filter:blur(15px);z-index:2;box-shadow:0 10px 30px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-weight:bold;text-shadow:0 2px 4px rgba(0,0,0,0.3);">✕</button>
+    <button id="close-fs" style="position:fixed;top:20px;right:20px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.4);color:white;font-size:1.2rem;width:44px;height:44px;border-radius:50%;cursor:pointer;backdrop-filter:blur(10px);z-index:2;display:flex;align-items:center;justify-content:center;">✕</button>
     <div style="position:fixed;bottom:30px;left:0;right:0;text-align:center;color:rgba(255,255,255,0.4);font-size:0.8rem;pointer-events:none;">Pizzica per zoomare • Doppio tap per resettare</div>
   `;
 
