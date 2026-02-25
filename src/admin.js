@@ -69,11 +69,20 @@ const AdminData = {
             );
             const querySnapshot = await getDocs(q);
             return querySnapshot.docs
-                .map(doc => doc.data())
+                .map(d => ({ id: d.id, ...d.data() }))
                 .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         } catch (e) {
             console.error('Errore nel recupero dei risultati:', e);
             return [];
+        }
+    },
+    async deleteResult(resultId) {
+        try {
+            await deleteDoc(doc(db, 'results', resultId));
+            return true;
+        } catch (e) {
+            console.error('Errore durante l\'eliminazione del risultato:', e);
+            return false;
         }
     }
 };
@@ -214,10 +223,15 @@ async function renderResults() {
         const disliked = submission.data.filter(r => !r.liked);
         const date = new Date(submission.timestamp).toLocaleString('it-IT');
         return `
-            <div class="result-card">
+            <div class="result-card" id="submission-${submission.id}">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;">
-                    <strong style="font-size:1.1rem;">👤 Utente ${allSubmissions.length - sIdx}</strong>
-                    <span style="font-size:0.85rem; color:var(--text-dim);">${date}</span>
+                    <div>
+                        <strong style="font-size:1.1rem;">👤 Utente ${allSubmissions.length - sIdx}</strong>
+                        <div style="font-size:0.85rem; color:var(--text-dim); margin-top:4px;">${date}</div>
+                    </div>
+                    <button onclick="deleteSubmission('${submission.id}')" class="btn-small" style="background:rgba(255,0,110,0.1); border-color:rgba(255,0,110,0.2); color:#ff4d94; padding:8px 12px; font-size:0.75rem;">
+                        🗑 Elimina Report
+                    </button>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
@@ -249,6 +263,17 @@ async function renderResults() {
         `;
     }).join('');
 }
+
+window.deleteSubmission = async (id) => {
+    if (confirm('Sei sicuro di voler eliminare definitivamente questo report?')) {
+        const success = await AdminData.deleteResult(id);
+        if (success) {
+            await renderResults();
+        } else {
+            alert('Errore durante l\'eliminazione del report.');
+        }
+    }
+};
 
 // --- Actions ---
 window.removeImage = async (idx) => {
