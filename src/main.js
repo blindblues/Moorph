@@ -244,7 +244,7 @@ function renderCards() {
   const images = state.currentProject.images;
   images.forEach((img, idx) => {
     const card = document.createElement('div');
-    card.className = 'tinder-card glass-card' + (idx > 0 ? ' bg-stack' : '');
+    card.className = 'tinder-card' + (idx > 0 ? ' bg-stack' : '');
     card.style.zIndex = images.length - idx;
     card.innerHTML = `<img src="${img}" class="card-image" />`;
     // Tap to fullscreen (only the top card, and only if not dragging)
@@ -417,8 +417,12 @@ function swipe(direction) {
 }
 
 function updateProgress() {
-  const prog = (state.currentIndex / state.currentProject.images.length) * 100;
+  const total = state.currentProject.images.length;
+  const current = Math.min(state.currentIndex + 1, total);
+
+  const prog = (state.currentIndex / total) * 100;
   document.getElementById('progress-bar').style.width = `${prog}%`;
+  document.getElementById('image-counter').innerText = `${current} / ${total}`;
 }
 
 async function finishProject() {

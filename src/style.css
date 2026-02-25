@@ -181,12 +181,13 @@ p {
   position: absolute;
   top: 0;
   width: 100%;
-  padding: 20px;
+  padding: 20px 30px;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 15px;
   z-index: 100;
+  background: linear-gradient(to bottom, rgba(5, 4, 16, 0.8) 0%, transparent 100%);
+  backdrop-filter: blur(10px);
 }
 
 .logo {
@@ -200,8 +201,56 @@ p {
   -webkit-text-fill-color: transparent;
 }
 
+.header-top {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.swipe-controls {
+  display: flex;
+  gap: 15px;
+}
+
+.btn-round-small {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.btn-round-small:hover {
+  transform: scale(1.1);
+}
+
+.progress-section {
+  width: 100%;
+}
+
+.progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.image-counter {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-white);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .progress-container {
-  width: min(80%, 300px);
+  flex: 1;
   height: 6px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
@@ -222,39 +271,37 @@ p {
   display: flex;
   justify-content: center;
   align-items: center;
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  padding: 20px;
+  height: 100%;
   perspective: 1000px;
+  overflow: hidden;
 }
 
 .card-deck {
-  position: relative;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  max-width: 380px;
-  aspect-ratio: 0.65;
-  /* Taller card */
+  height: 100%;
 }
 
 .tinder-card {
   position: absolute;
   inset: 0;
-  border-radius: 28px;
-  overflow: hidden;
+  width: 100%;
+  height: 100%;
   cursor: grab;
   touch-action: none;
   will-change: transform;
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow-premium);
-  transform-style: preserve-3d;
 }
 
 .tinder-card.bg-stack {
-  transform: scale(0.92) translateY(30px);
-  filter: blur(4px) brightness(0.6);
-  opacity: 0.4;
+  transform: scale(1.05);
+  filter: blur(20px) brightness(0.4);
+  opacity: 0.1;
   pointer-events: none;
-  z-index: -1;
+  z-index: 1;
 }
 
 .card-image {
@@ -300,7 +347,7 @@ p {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 10;
+  z-index: 150;
 }
 
 /* Auras feedback */
@@ -310,7 +357,7 @@ p {
   bottom: 0;
   width: 50%;
   pointer-events: none;
-  z-index: 5;
+  z-index: 200;
   opacity: 0;
   filter: blur(60px);
 }
@@ -760,9 +807,8 @@ input:focus {
   }
 
   .card-deck {
-    max-width: 90vw;
-    max-height: 65vh;
-    /* Increased height limit */
+    width: 100%;
+    height: 100%;
   }
 
   .swipe-footer {

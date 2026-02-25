@@ -67,9 +67,20 @@
     <!-- Swipe View -->
     <div id="view-swipe" class="view hidden">
       <header class="main-header">
-        <div class="logo">Moorph</div>
-        <div class="progress-container">
-          <div id="progress-bar" class="progress-bar"></div>
+        <div class="header-top">
+          <div class="logo">Moorph</div>
+          <div class="swipe-controls">
+            <button id="ctrl-dislike" class="btn-round-small btn-nope" title="Non mi piace">✕</button>
+            <button id="ctrl-like" class="btn-round-small btn-love" title="Mi piace">♥</button>
+          </div>
+        </div>
+        <div class="progress-section">
+          <div class="progress-wrapper">
+            <div class="progress-container">
+              <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <span id="image-counter" class="image-counter">0 / 0</span>
+          </div>
         </div>
       </header>
 
@@ -86,10 +97,6 @@
       <div id="indicator-like" class="swipe-indicator indicator-like">Like</div>
       <div id="indicator-dislike" class="swipe-indicator indicator-dislike">Nope</div>
 
-      <footer class="swipe-footer">
-        <button id="ctrl-dislike" class="btn-round btn-nope" title="Non mi piace">✕</button>
-        <button id="ctrl-like" class="btn-round btn-love" title="Mi piace">♥</button>
-      </footer>
     </div>
 
     <!-- Success View -->
