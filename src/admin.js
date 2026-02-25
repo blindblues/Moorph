@@ -211,15 +211,39 @@ async function renderResults() {
 
     el.resultsSummary.innerHTML = allSubmissions.map((submission, sIdx) => {
         const liked = submission.data.filter(r => r.liked);
+        const disliked = submission.data.filter(r => !r.liked);
         const date = new Date(submission.timestamp).toLocaleString('it-IT');
         return `
             <div class="result-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <strong>👤 Utente ${allSubmissions.length - sIdx}</strong>
-                    <span style="font-size:0.8rem; color:var(--text-dim);">${date}</span>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;">
+                    <strong style="font-size:1.1rem;">👤 Utente ${allSubmissions.length - sIdx}</strong>
+                    <span style="font-size:0.85rem; color:var(--text-dim);">${date}</span>
                 </div>
-                <div style="display:flex; flex-wrap:wrap; gap:6px;">
-                    ${liked.map(r => `<img src="${r.image}" onclick="openLightbox('${r.image.replace(/'/g, "\\'")}')" style="width:50px; height:50px; object-fit:cover; border-radius:10px; border:1px solid var(--secondary); cursor:pointer;" />`).join('')}
+                
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <!-- LIKE COLUMN -->
+                    <div>
+                        <h4 style="color:#00ffa3; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                            <span style="background:rgba(0,255,163,0.15); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px;">✓</span>
+                            Mi piace (${liked.length})
+                        </h4>
+                        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                            ${liked.map(r => `<img src="${r.image}" onclick="openLightbox('${r.image.replace(/'/g, "\\'")}')" style="width:45px; height:45px; object-fit:cover; border-radius:10px; border:1px solid rgba(0,255,163,0.3); cursor:pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" />`).join('')}
+                            ${liked.length === 0 ? '<p style="font-size:0.75rem; color:var(--text-dim);">Nessun like</p>' : ''}
+                        </div>
+                    </div>
+
+                    <!-- DISLIKE COLUMN -->
+                    <div>
+                        <h4 style="color:#ff006e; font-size:0.75rem; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+                            <span style="background:rgba(255,0,110,0.15); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:10px;">✕</span>
+                            Non piace (${disliked.length})
+                        </h4>
+                        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                            ${disliked.map(r => `<img src="${r.image}" onclick="openLightbox('${r.image.replace(/'/g, "\\'")}')" style="width:45px; height:45px; object-fit:cover; border-radius:10px; border:1px solid rgba(255,0,110,0.3); opacity:0.6; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.transform='scale(1.1)'; this.style.opacity='1'" onmouseout="this.style.transform='scale(1)'; this.style.opacity='0.6'" />`).join('')}
+                            ${disliked.length === 0 ? '<p style="font-size:0.75rem; color:var(--text-dim);">Nessun dislike</p>' : ''}
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
