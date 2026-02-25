@@ -41,7 +41,8 @@ const state = {
   cards: [],
   isAnimating: false,
   particles: null,
-  dragDistX: 0
+  dragDistX: 0,
+  tutorialStep: 1
 };
 
 // Optimized Particle System using GSAP Ticker
@@ -173,20 +174,42 @@ function showView(id) {
 // Auth
 document.getElementById('btn-login').onclick = () => {
   const pass = document.getElementById('project-password').value;
-  if (pass === state.currentProject.password) showView('tutorial');
-  else document.getElementById('password-error').classList.remove('hidden');
+  if (pass === state.currentProject.password) {
+    state.tutorialStep = 1;
+    document.getElementById('tutorial-p1').classList.remove('hidden');
+    gsap.set('#tutorial-p1', { opacity: 1 });
+    document.getElementById('tutorial-p2').classList.add('hidden');
+    document.getElementById('btn-next-step').innerText = 'Continua';
+    showView('tutorial');
+  } else {
+    document.getElementById('password-error').classList.remove('hidden');
+  }
 };
 
-document.getElementById('btn-start').onclick = async () => {
-  // Show a loading indicator if the first image isn't ready
-  const btn = document.getElementById('btn-start');
+document.getElementById('btn-next-step').onclick = async () => {
+  if (state.tutorialStep === 1) {
+    // Phase 1 -> Phase 2
+    state.tutorialStep = 2;
+    gsap.to('#tutorial-p1', {
+      opacity: 0, duration: 0.3, onComplete: () => {
+        document.getElementById('tutorial-p1').classList.add('hidden');
+        document.getElementById('tutorial-p2').classList.remove('hidden');
+        gsap.fromTo('#tutorial-p2', { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.4 });
+        document.getElementById('btn-next-step').innerText = 'Iniziamo!';
+      }
+    });
+    return;
+  }
+
+  // Phase 2 -> Start App
+  const btn = document.getElementById('btn-next-step');
   const originalText = btn.innerText;
   btn.innerText = 'Caricamento immagini...';
   btn.style.opacity = '0.7';
   btn.disabled = true;
 
   try {
-    await renderCards(true); // This now waits for the top image
+    await renderCards(true);
     showView('swipe');
   } catch (e) {
     console.error('Errore caricamento:', e);

@@ -166,6 +166,14 @@ p {
   line-height: 1.4;
 }
 
+.tutorial-page {
+  width: 100%;
+}
+
+.text-center {
+  text-align: center;
+}
+
 /* Buttons */
 .btn-primary {
   background: linear-gradient(135deg, var(--primary), var(--secondary));
