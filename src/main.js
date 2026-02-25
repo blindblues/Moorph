@@ -270,7 +270,7 @@ function openFullscreen(src) {
     lb.innerHTML = `
       <img id="fullscreen-img" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;user-select:none;" />
       <button id="btn-close-fullscreen" style="position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.12);border:none;color:white;font-size:1.4rem;width:44px;height:44px;border-radius:50%;cursor:pointer;z-index:1;">✕</button>
-      <p style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);font-size:0.8rem;color:rgba(255,255,255,0.4);pointer-events:none;">Pizzica o scrolla per zoomare • Doppio tap per resettare</p>
+      <p style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:90%;text-align:center;font-size:0.8rem;color:rgba(255,255,255,0.4);pointer-events:none;">Pizzica o scrolla per zoomare • Doppio tap per resettare</p>
     `;
     document.body.appendChild(lb);
     document.getElementById('btn-close-fullscreen').addEventListener('click', closeFullscreen);
