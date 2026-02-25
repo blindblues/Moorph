@@ -208,28 +208,6 @@ p {
   align-items: center;
 }
 
-.swipe-controls {
-  display: flex;
-  gap: 15px;
-}
-
-.btn-round-small {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: none;
-  font-size: 1.1rem;
-  cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.btn-round-small:hover {
-  transform: scale(1.1);
-}
 
 .progress-section {
   width: 100%;
@@ -373,12 +351,22 @@ p {
 }
 
 .swipe-footer {
-  padding-bottom: clamp(20px, 10vh, 50px);
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  padding-bottom: clamp(30px, 8vh, 60px);
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 1000;
+  background: linear-gradient(to top, rgba(5, 4, 16, 0.8) 0%, transparent 100%);
+  pointer-events: none;
+}
+
+.swipe-controls-bottom {
+  display: flex;
   gap: 30px;
-  width: 100%;
+  pointer-events: all;
 }
 
 .btn-round {
