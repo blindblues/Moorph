@@ -100,14 +100,22 @@
                     </p>
 
 
-                    <div class="upload-area glass-card" id="drop-zone">
-                        <div>
-                            <p style="color: white; font-weight: 600;">Trascina o clicca per caricare</p>
-                            <p style="font-size: 0.8rem; margin-top: 4px;">PNG, JPG, WEBP supportati</p>
+                    <div id="bulk-actions-bar" class="hidden"
+                        style="margin-top: 20px; padding: 10px; background: rgba(255,59,59,0.05); border: 1px solid rgba(255,59,59,0.1); border-radius: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <button id="btn-select-all" class="btn-small"
+                                style="font-size: 0.75rem; background: rgba(255,255,255,0.1);">✅ Seleziona
+                                Tutti</button>
+                            <button id="btn-deselect-all" class="btn-small"
+                                style="font-size: 0.75rem; background: rgba(255,255,255,0.05);">❌ Deseleziona</button>
+                            <span id="selected-count" style="font-size: 0.8rem; font-weight: 600; margin-left:8px;">0
+                                selezionati</span>
                         </div>
-                        <input type="file" id="file-input" multiple class="hidden" />
+                        <button id="btn-delete-selected" class="btn-danger btn-small"
+                            style="font-size: 0.75rem; padding: 6px 15px;">🗑 Elimina Selezionati</button>
                     </div>
-                    <div id="image-grid" class="image-grid">
+
+                    <div id="image-grid" class="image-grid" style="margin-top: 20px;">
                         <!-- Images injected by JS -->
                     </div>
                 </div>

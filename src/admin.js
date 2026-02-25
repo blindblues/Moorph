@@ -265,8 +265,12 @@ const el = {
     imageGrid: document.getElementById('image-grid'),
     resultsSummary: document.getElementById('results-summary'),
     localFolderInfo: document.getElementById('local-folder-info'),
-    modalSettings: document.getElementById('modal-settings')
+    modalSettings: document.getElementById('modal-settings'),
+    bulkActionsBar: document.getElementById('bulk-actions-bar'),
+    selectedCount: document.getElementById('selected-count')
 };
+
+let selectedImages = new Set();
 
 // --- Initialization ---
 async function init() {
@@ -288,6 +292,9 @@ window.selectProject = async (id) => {
     const projects = await AdminData.getProjects();
     activeProject = projects.find(p => p.id === id);
     if (!activeProject) return;
+
+    selectedImages.clear();
+    updateBulkBar();
 
     // Fetch images: Source of Truth
     // 1. Try local folder (Local Dev)
@@ -338,12 +345,39 @@ window.selectProject = async (id) => {
 };
 
 function renderImages() {
-    el.imageGrid.innerHTML = activeProject.images.map((img, idx) => `
-    <div class="image-card" onclick="openLightbox('${img.replace(/'/g, "\\'")}')">
-      <img src="${img}" style="pointer-events:none;" />
-      <button class="remove-btn" onclick="event.stopPropagation(); removeImage(${idx})">×</button>
-    </div>
-  `).join('');
+    el.imageGrid.innerHTML = activeProject.images.map((img, idx) => {
+        const isSelected = selectedImages.has(img);
+        return `
+            <div class="image-card ${isSelected ? 'selected' : ''}" onclick="toggleImageSelection('${img.replace(/'/g, "\\'")}')">
+                <img src="${img}" style="pointer-events:none;" />
+                <div class="selection-overlay">
+                    <div class="checkbox ${isSelected ? 'checked' : ''}"></div>
+                </div>
+                <button class="remove-btn" onclick="event.stopPropagation(); removeImage(${idx})">×</button>
+            </div>
+        `;
+    }).join('');
+}
+
+window.toggleImageSelection = (url) => {
+    if (selectedImages.has(url)) {
+        selectedImages.delete(url);
+    } else {
+        selectedImages.add(url);
+    }
+    updateBulkBar();
+    renderImages();
+};
+
+function updateBulkBar() {
+    if (selectedImages.size > 0) {
+        el.bulkActionsBar.classList.remove('hidden');
+        el.bulkActionsBar.style.display = 'flex';
+        el.selectedCount.innerText = `${selectedImages.size} selezionati`;
+    } else {
+        el.bulkActionsBar.classList.add('hidden');
+        el.bulkActionsBar.style.display = 'none';
+    }
 }
 
 let lightboxCleanup = null;
@@ -631,6 +665,46 @@ function setupEventListeners() {
         localStorage.setItem('moorph_gh_config', JSON.stringify(config));
         alert('Configurazione GitHub salvata localmente nel browser!');
         el.modalSettings.classList.add('hidden');
+    });
+
+    // --- Bulk Actions ---
+    document.getElementById('btn-select-all').addEventListener('click', () => {
+        activeProject.images.forEach(img => selectedImages.add(img));
+        updateBulkBar();
+        renderImages();
+    });
+
+    document.getElementById('btn-deselect-all').addEventListener('click', () => {
+        selectedImages.clear();
+        updateBulkBar();
+        renderImages();
+    });
+
+    document.getElementById('btn-delete-selected').addEventListener('click', async () => {
+        const count = selectedImages.size;
+        if (!confirm(`Sei sicuro di voler eliminare definitivamente ${count} immagini?`)) return;
+
+        const btn = document.getElementById('btn-delete-selected');
+        btn.disabled = true;
+        btn.innerText = '⌛ Eliminazione...';
+
+        try {
+            const toDelete = Array.from(selectedImages);
+            for (const url of toDelete) {
+                await AdminData.deleteLocalImage(activeProject.id, url);
+                await AdminData.deleteFromGitHub(activeProject.id, url);
+                activeProject.images = activeProject.images.filter(img => img !== url);
+            }
+            selectedImages.clear();
+            updateBulkBar();
+            await updateActiveProject();
+            alert(`Eliminate ${count} immagini con successo!`);
+        } catch (e) {
+            alert('Errore durante l\'eliminazione multipla.');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = '🗑 Elimina Selezionati';
+        }
     });
 
 }
