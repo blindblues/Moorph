@@ -129,19 +129,14 @@ const views = {
   success: document.getElementById('view-success')
 };
 
+// --- Initialization ---
 async function init() {
   const shortId = new URLSearchParams(window.location.search).get('s');
   state.particles = new SwipeParticles();
 
-  // Background blobs animation with GSAP for better smoothness than CSS
-  gsap.to('.blob-1', {
-    x: '10vw', y: '10vh', scale: 1.2, duration: 20,
-    repeat: -1, yoyo: true, ease: 'sine.inOut'
-  });
-  gsap.to('.blob-2', {
-    x: '-10vw', y: '-10vh', scale: 1.3, duration: 25,
-    repeat: -1, yoyo: true, ease: 'sine.inOut', delay: -5
-  });
+  // Background blobs animation
+  gsap.to('.blob-1', { x: '10vw', y: '10vh', scale: 1.2, duration: 20, repeat: -1, yoyo: true, ease: 'sine.inOut' });
+  gsap.to('.blob-2', { x: '-10vw', y: '-10vh', scale: 1.3, duration: 25, repeat: -1, yoyo: true, ease: 'sine.inOut', delay: -5 });
 
   if (shortId) {
     const project = await DataManager.getProjectFromFirebase(shortId);
@@ -182,25 +177,62 @@ document.getElementById('btn-login').onclick = () => {
   else document.getElementById('password-error').classList.remove('hidden');
 };
 
-document.getElementById('btn-start').onclick = () => {
-  showView('swipe');
-  renderCards();
+document.getElementById('btn-start').onclick = async () => {
+  // Show a loading indicator if the first image isn't ready
+  const btn = document.getElementById('btn-start');
+  const originalText = btn.innerText;
+  btn.innerText = 'Caricamento immagini...';
+  btn.style.opacity = '0.7';
+  btn.disabled = true;
+
+  try {
+    await renderCards(); // This now waits for the top image
+    showView('swipe');
+  } catch (e) {
+    console.error('Errore caricamento:', e);
+    btn.innerText = originalText;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
 };
 
-function renderCards() {
+// --- Progressive Loading Logic ---
+async function preloadImage(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(url);
+    img.onerror = () => reject(url);
+    img.src = url;
+  });
+}
+
+async function renderCards() {
   const deck = document.getElementById('card-deck');
-  deck.innerHTML = '';
   const images = state.currentProject.images;
 
-  images.forEach((img, idx) => {
+  if (!images || images.length === 0) return alert('Nessuna immagine.');
+
+  // Render ONLY CURRENT and NEXT to keep DOM light and memory footprint low
+  // This solves Firefox Android loading/crashing issues
+  deck.innerHTML = '';
+  state.cards = [];
+
+  const maxToRender = Math.min(state.currentIndex + 2, images.length);
+
+  // Preload top image first for maximum stability
+  if (state.currentIndex < images.length) {
+    await preloadImage(images[state.currentIndex]);
+  }
+
+  for (let i = state.currentIndex; i < maxToRender; i++) {
     const card = document.createElement('div');
-    card.className = 'tinder-card' + (idx > 0 ? ' bg-stack' : '');
-    card.style.zIndex = images.length - idx;
-    card.innerHTML = `<img src="${img}" class="card-image" loading="${idx < 2 ? 'eager' : 'lazy'}" />`;
-    card.onclick = () => { if (Math.abs(state.dragDistX) < 5) openFullscreen(img); };
+    card.className = 'tinder-card' + (i > state.currentIndex ? ' bg-stack' : '');
+    card.style.zIndex = images.length - i;
+    card.innerHTML = `<img src="${images[i]}" class="card-image" />`;
+    card.onclick = () => { if (Math.abs(state.dragDistX) < 5) openFullscreen(images[i]); };
     deck.appendChild(card);
-    state.cards.push(card);
-  });
+    state.cards[i] = card;
+  }
 
   setupDraggable();
   updateProgress();
@@ -208,7 +240,7 @@ function renderCards() {
 
 function openFullscreen(src) {
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;cursor:zoom-out;';
   overlay.innerHTML = `<img src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);" />`;
   overlay.onclick = () => {
     gsap.to(overlay, { opacity: 0, duration: 0.3, onComplete: () => overlay.remove() });
@@ -221,7 +253,6 @@ function setupDraggable() {
   const topCard = document.querySelector('.tinder-card:not(.bg-stack)');
   if (!topCard) return;
 
-  // Use QuickSetters for extreme performance during drag
   const setIndicatorLike = gsap.quickSetter('#indicator-like', 'opacity');
   const setIndicatorNope = gsap.quickSetter('#indicator-dislike', 'opacity');
   const setAuraLeft = gsap.quickSetter('#aura-left', 'opacity');
@@ -296,17 +327,15 @@ function swipe(direction) {
     rotation: direction === 'right' ? 40 : -40,
     duration: 0.4,
     ease: 'power2.in',
-    onComplete: () => {
+    onComplete: async () => {
       card.remove();
       state.currentIndex++;
       state.isAnimating = false;
       gsap.set(['.swipe-indicator', '.swipe-aura'], { opacity: 0 });
       updateProgress();
-      const nextCard = document.querySelector('.tinder-card');
-      if (nextCard) {
-        nextCard.classList.remove('bg-stack');
-        gsap.to(nextCard, { scale: 1, filter: 'blur(0px)', y: 0, opacity: 1, duration: 0.4, ease: 'power3.out' });
-        setupDraggable();
+
+      if (state.currentIndex < state.currentProject.images.length) {
+        await renderCards(); // Load next batch
       } else {
         finishProject();
       }
