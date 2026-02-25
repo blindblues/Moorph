@@ -238,12 +238,21 @@ async function renderCards(initial = false) {
 }
 
 function openFullscreen(src) {
+  const topCard = document.querySelector('.tinder-card:not(.bg-stack)');
+  const draggable = Draggable.get(topCard);
+  if (draggable) draggable.disable();
+
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;cursor:zoom-out;';
-  overlay.innerHTML = `<img src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);transform:scale(0.9);" />`;
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;cursor:zoom-out;user-select:none;touch-action:none;';
+  overlay.innerHTML = `<img src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);transform:scale(0.9);pointer-events:none;" />`;
 
   const close = () => {
-    gsap.to(overlay, { opacity: 0, duration: 0.3, onComplete: () => overlay.remove() });
+    gsap.to(overlay, {
+      opacity: 0, duration: 0.3, onComplete: () => {
+        overlay.remove();
+        if (draggable) draggable.enable();
+      }
+    });
     document.body.style.overflow = '';
   };
 
