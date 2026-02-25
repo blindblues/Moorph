@@ -34,12 +34,8 @@ const AdminData = {
             const querySnapshot = await getDocs(collection(db, 'projects'));
             const remote = querySnapshot.docs.map(doc => doc.data());
 
-            // Merge: filter out duplicates based on ID
-            const merged = [...remote];
-            local.forEach(lp => {
-                if (!merged.find(rp => rp.id === lp.id)) merged.push(lp);
-            });
-
+            // Source of truth: remote projects from Firebase
+            const merged = remote;
             this.saveProjects(merged);
             return merged;
         } catch (e) {
