@@ -528,40 +528,60 @@ async function fetchPinterestImages(boardUrl) {
 function extractPinImagesFromJson(html) {
     const results = new Set();
 
-    // Pinterest uses several script tag IDs across versions
+    // Pinterest uses <script type="application/json"> tags for page data
     const scriptRegex = /<script[^>]+type="application\/json"[^>]*>([\s\S]*?)<\/script>/g;
     let match;
     while ((match = scriptRegex.exec(html)) !== null) {
         try {
             const data = JSON.parse(match[1]);
-            walkForPinImages(data, results);
-            if (results.size > 3) break; // Found actual pin data, stop
-        } catch { /* not valid JSON, skip */ }
+            walkForPinImages(data, results, false);
+            if (results.size > 3) break;
+        } catch { /* not valid JSON */ }
     }
 
     return [...results];
 }
 
-function walkForPinImages(node, results) {
+// Keys that indicate sections NOT belonging to the board (related/suggested content)
+const EXCLUDED_KEYS = new Set([
+    'relatedPins', 'related_pins', 'relatedBoards', 'related_boards',
+    'moreIdeas', 'more_ideas', 'shuffledFeed', 'homefeed',
+    'recommendedPins', 'recommended_pins', 'featuredPins', 'featured_pins',
+    'interestFeed', 'smartFeed', 'userHomeFeed'
+]);
+
+// Pin-type values in Pinterest's data
+const PIN_TYPES = new Set(['pin', 'story', 'richpin', 'video']);
+
+function walkForPinImages(node, results, insidePin) {
     if (!node || typeof node !== 'object') return;
 
-    // Pin image objects have url (pinimg.com) + width + height
+    // Detect if this node is a real pin object
+    const isPin = insidePin
+        || PIN_TYPES.has(node.type)
+        || (node.pinner !== undefined && node.board !== undefined)  // classic pin structure
+        || (node.pin_join !== undefined);                            // another pin indicator
+
+    // If we're inside a pin and hit a {url, width, height} object — collect it
     if (
+        isPin &&
         typeof node.url === 'string' &&
         node.url.includes('i.pinimg.com') &&
         node.url.endsWith('.jpg') &&
         typeof node.width === 'number' &&
-        typeof node.height === 'number' &&
-        node.width >= 236 // filter out tiny icons
+        node.width >= 236
     ) {
         results.add(node.url);
         return;
     }
 
     if (Array.isArray(node)) {
-        for (const child of node) walkForPinImages(child, results);
+        for (const child of node) walkForPinImages(child, results, isPin);
     } else {
-        for (const val of Object.values(node)) walkForPinImages(val, results);
+        for (const [key, val] of Object.entries(node)) {
+            if (EXCLUDED_KEYS.has(key)) continue; // Skip related/suggested sections
+            walkForPinImages(val, results, isPin);
+        }
     }
 }
 
