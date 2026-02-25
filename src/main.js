@@ -6,28 +6,29 @@ import { makeZoomable } from './zoom.js';
 
 gsap.registerPlugin(Draggable);
 
+// GSAP Performance Defaults
+gsap.config({ force3D: true, autoSleep: 60 });
+
 // --- Data Management ---
 const DataManager = {
-  // Fetch project directly from doc - Images are now stored in the doc itself
   async getProjectFromFirebase(id) {
     try {
       const projectDoc = await getDoc(doc(db, 'projects', id));
-      if (!projectDoc.exists()) return null;
-      return projectDoc.data();
+      return projectDoc.exists() ? projectDoc.data() : null;
     } catch (e) {
-      console.error('Errore nel recupero del progetto da Firebase:', e);
+      console.error('Errore Firebase:', e);
       return null;
     }
   },
   async saveResult(projectId, results) {
     try {
       await addDoc(collection(db, 'results'), {
-        projectId: projectId,
+        projectId,
         timestamp: new Date().toISOString(),
         data: results
       });
     } catch (e) {
-      console.error('Errore nel salvataggio su Firebase:', e);
+      console.error('Errore salvataggio:', e);
     }
   }
 };
@@ -39,17 +40,21 @@ const state = {
   results: [],
   cards: [],
   isAnimating: false,
-  particles: null
+  particles: null,
+  dragDistX: 0
 };
 
+// Optimized Particle System using GSAP Ticker
 class SwipeParticles {
   constructor() {
     this.canvas = document.getElementById('swipe-particles');
-    this.ctx = this.canvas.getContext('2d');
+    this.ctx = this.canvas.getContext('2d', { alpha: true });
     this.particles = [];
     this.resize();
-    window.addEventListener('resize', () => this.resize());
-    this.animate();
+    window.addEventListener('resize', () => this.resize(), { passive: true });
+
+    // Use GSAP Ticker for centralized animation management
+    gsap.ticker.add(() => this.update());
   }
 
   resize() {
@@ -59,60 +64,63 @@ class SwipeParticles {
 
   spawn(x, direction, amount = 1) {
     const color = direction === 'right' ? '#00ffa3' : '#ff006e';
+    const edgeX = direction === 'right' ? this.canvas.width : 0;
+    const vxBase = (direction === 'right' ? -1 : 1);
+
     for (let i = 0; i < amount; i++) {
-      const edgeX = direction === 'right' ? this.canvas.width : 0;
       this.particles.push({
         x: edgeX,
         y: Math.random() * this.canvas.height,
-        vx: (direction === 'right' ? -1 : 1) * (Math.random() * 6 + 4),
+        vx: vxBase * (Math.random() * 6 + 4),
         vy: (Math.random() - 0.5) * 2,
         size: Math.random() * 2 + 1,
-        alpha: 1,
-        color: color,
-        life: 0.6 + Math.random() * 0.4
+        life: 1,
+        color: color
       });
     }
   }
 
-  animate() {
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+  update() {
+    if (this.particles.length === 0) return;
+
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.x += p.vx;
       p.y += p.vy;
       p.life -= 0.025;
-      p.alpha = Math.max(0, p.life);
 
       if (p.life <= 0) {
         this.particles.splice(i, 1);
         continue;
       }
 
-      this.ctx.save();
-      this.ctx.globalAlpha = p.alpha;
-      this.ctx.shadowBlur = 15;
-      this.ctx.shadowColor = p.color;
-      this.ctx.beginPath();
-      this.ctx.moveTo(p.x, p.y);
-      this.ctx.lineTo(p.x - p.vx * 2, p.y);
-      this.ctx.strokeStyle = p.color;
-      this.ctx.lineWidth = p.size;
-      this.ctx.lineCap = 'round';
-      this.ctx.stroke();
-      this.ctx.shadowBlur = 10;
-      this.ctx.fillStyle = '#fff';
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, p.size / 2.5, 0, Math.PI * 2);
-      this.ctx.fill();
-      this.ctx.restore();
-    }
+      ctx.save();
+      ctx.globalAlpha = p.life;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = p.color;
 
-    requestAnimationFrame(() => this.animate());
+      // Draw a "streak" line for speed effect
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.vx * 1.5, p.y);
+      ctx.strokeStyle = p.color;
+      ctx.lineWidth = p.size;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+
+      // Core bright spot
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+      ctx.fillStyle = '#fff';
+      ctx.fill();
+      ctx.restore();
+    }
   }
 }
 
-// --- DOM Elements ---
 const views = {
   loading: document.getElementById('view-loading'),
   password: document.getElementById('view-password'),
@@ -121,12 +129,19 @@ const views = {
   success: document.getElementById('view-success')
 };
 
-// --- Initialization ---
 async function init() {
-  const params = new URLSearchParams(window.location.search);
-  const shortId = params.get('s');
-
+  const shortId = new URLSearchParams(window.location.search).get('s');
   state.particles = new SwipeParticles();
+
+  // Background blobs animation with GSAP for better smoothness than CSS
+  gsap.to('.blob-1', {
+    x: '10vw', y: '10vh', scale: 1.2, duration: 20,
+    repeat: -1, yoyo: true, ease: 'sine.inOut'
+  });
+  gsap.to('.blob-2', {
+    x: '-10vw', y: '-10vh', scale: 1.3, duration: 25,
+    repeat: -1, yoyo: true, ease: 'sine.inOut', delay: -5
+  });
 
   if (shortId) {
     const project = await DataManager.getProjectFromFirebase(shortId);
@@ -136,16 +151,12 @@ async function init() {
       return;
     }
   }
-
-  // Demo fallback
   setupDemo();
 }
 
 function setupDemo() {
   state.currentProject = {
-    id: 'demo',
-    name: 'Demo Project',
-    password: '123',
+    id: 'demo', name: 'Demo Project', password: '123',
     images: [
       'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80',
       'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=800&q=80',
@@ -156,46 +167,37 @@ function setupDemo() {
   showView('password');
 }
 
-function showView(viewId) {
-  Object.values(views).forEach(v => v.classList.add('hidden'));
-  if (views[viewId]) views[viewId].classList.remove('hidden');
+function showView(id) {
+  Object.values(views).forEach(v => v?.classList.add('hidden'));
+  if (views[id]) {
+    views[id].classList.remove('hidden');
+    gsap.fromTo(views[id], { opacity: 0, scale: 0.98 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'power2.out' });
+  }
 }
 
-// --- Auth ---
-document.getElementById('btn-login').addEventListener('click', () => {
+// Auth
+document.getElementById('btn-login').onclick = () => {
   const pass = document.getElementById('project-password').value;
-  if (pass === state.currentProject.password) {
-    showView('tutorial');
-  } else {
-    document.getElementById('password-error').classList.remove('hidden');
-  }
-});
+  if (pass === state.currentProject.password) showView('tutorial');
+  else document.getElementById('password-error').classList.remove('hidden');
+};
 
-// --- Tutorial ---
-document.getElementById('btn-start').addEventListener('click', () => {
+document.getElementById('btn-start').onclick = () => {
   showView('swipe');
   renderCards();
-});
+};
 
-// --- Swipe Logic ---
 function renderCards() {
   const deck = document.getElementById('card-deck');
   deck.innerHTML = '';
-
   const images = state.currentProject.images;
-  if (!images || images.length === 0) {
-    alert('Questo progetto non ha immagini.');
-    return;
-  }
 
   images.forEach((img, idx) => {
     const card = document.createElement('div');
     card.className = 'tinder-card' + (idx > 0 ? ' bg-stack' : '');
     card.style.zIndex = images.length - idx;
-    card.innerHTML = `<img src="${img}" class="card-image" onerror="this.src='/vite.svg'; this.style.opacity=0.3;" />`;
-    card.addEventListener('click', (e) => {
-      if (Math.abs(state.dragDistX || 0) < 10) openFullscreen(img);
-    });
+    card.innerHTML = `<img src="${img}" class="card-image" loading="${idx < 2 ? 'eager' : 'lazy'}" />`;
+    card.onclick = () => { if (Math.abs(state.dragDistX) < 5) openFullscreen(img); };
     deck.appendChild(card);
     state.cards.push(card);
   });
@@ -204,103 +206,72 @@ function renderCards() {
   updateProgress();
 }
 
-let fullscreenCleanup = null;
 function openFullscreen(src) {
-  let lb = document.getElementById('fullscreen-overlay');
-  if (!lb) {
-    lb = document.createElement('div');
-    lb.id = 'fullscreen-overlay';
-    lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.96);z-index:99999;display:none;justify-content:center;align-items:center;padding:16px;';
-    lb.innerHTML = `
-      <img id="fullscreen-img" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;user-select:none;" />
-      <button id="btn-close-fullscreen" style="position:fixed;top:16px;right:16px;background:rgba(255,255,255,0.12);border:none;color:white;font-size:1.4rem;width:44px;height:44px;border-radius:50%;cursor:pointer;z-index:1;">✕</button>
-      <p style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);width:90%;text-align:center;font-size:0.8rem;color:rgba(255,255,255,0.4);pointer-events:none;">Pizzica o scrolla per zoomare • Doppio tap per resettare</p>
-    `;
-    document.body.appendChild(lb);
-    document.getElementById('btn-close-fullscreen').addEventListener('click', closeFullscreen);
-    lb.addEventListener('click', (e) => { if (e.target === lb) closeFullscreen(); });
-  }
-
-  const img = lb.querySelector('#fullscreen-img');
-  img.src = src;
-  img.style.transform = '';
-  img.style.cursor = 'zoom-in';
-  lb.style.display = 'flex';
-  const deck = document.getElementById('card-deck');
-  if (deck) deck.style.pointerEvents = 'none';
-  document.body.style.overflow = 'hidden';
-  document.body.style.pointerEvents = 'none';
-  lb.style.pointerEvents = 'all';
-
-  if (fullscreenCleanup) fullscreenCleanup();
-  fullscreenCleanup = makeZoomable(img, lb);
-}
-
-function closeFullscreen() {
-  const lb = document.getElementById('fullscreen-overlay');
-  if (lb) lb.style.display = 'none';
-  const deck = document.getElementById('card-deck');
-  if (deck) deck.style.pointerEvents = '';
-  document.body.style.overflow = '';
-  document.body.style.pointerEvents = '';
-  if (fullscreenCleanup) { fullscreenCleanup(); fullscreenCleanup = null; }
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:99999;display:flex;justify-content:center;align-items:center;opacity:0;';
+  overlay.innerHTML = `<img src="${src}" style="max-width:96%;max-height:96%;border-radius:16px;box-shadow:0 30px 60px rgba(0,0,0,0.5);" />`;
+  overlay.onclick = () => {
+    gsap.to(overlay, { opacity: 0, duration: 0.3, onComplete: () => overlay.remove() });
+  };
+  document.body.appendChild(overlay);
+  gsap.to(overlay, { opacity: 1, duration: 0.3 });
 }
 
 function setupDraggable() {
   const topCard = document.querySelector('.tinder-card:not(.bg-stack)');
   if (!topCard) return;
 
-  const existing = Draggable.get(topCard);
-  if (existing) existing.kill();
+  // Use QuickSetters for extreme performance during drag
+  const setIndicatorLike = gsap.quickSetter('#indicator-like', 'opacity');
+  const setIndicatorNope = gsap.quickSetter('#indicator-dislike', 'opacity');
+  const setAuraLeft = gsap.quickSetter('#aura-left', 'opacity');
+  const setAuraRight = gsap.quickSetter('#aura-right', 'opacity');
+  const setScaleLike = gsap.quickSetter('#indicator-like', 'scale');
+  const setScaleNope = gsap.quickSetter('#indicator-dislike', 'scale');
 
   Draggable.create(topCard, {
     type: 'x,y',
     onDrag: function () {
       const x = this.x;
       state.dragDistX = x;
-      const opacity = Math.min(Math.abs(x) / 100, 1);
-      const likeNode = document.getElementById('indicator-like');
-      const dislikeNode = document.getElementById('indicator-dislike');
-      const auraLeft = document.getElementById('aura-left');
-      const auraRight = document.getElementById('aura-right');
+      const progress = Math.min(Math.abs(x) / 150, 1);
 
       if (x > 0) {
-        gsap.set(likeNode, { opacity: opacity, scale: 0.5 + opacity * 0.5 });
-        gsap.set(dislikeNode, { opacity: 0 });
-        gsap.set(auraRight, { opacity: opacity });
-        gsap.set(auraLeft, { opacity: 0 });
+        setIndicatorLike(progress); setScaleLike(0.8 + progress * 0.4);
+        setIndicatorNope(0);
+        setAuraRight(progress * 0.6); setAuraLeft(0);
       } else {
-        gsap.set(dislikeNode, { opacity: opacity, scale: 0.5 + opacity * 0.5 });
-        gsap.set(likeNode, { opacity: 0 });
-        gsap.set(auraLeft, { opacity: opacity });
-        gsap.set(auraRight, { opacity: 0 });
+        setIndicatorNope(progress); setScaleNope(0.8 + progress * 0.4);
+        setIndicatorLike(0);
+        setAuraLeft(progress * 0.6); setAuraRight(0);
       }
 
-      if (opacity > 0.4) {
-        state.particles.spawn(x, x > 0 ? 'right' : 'left', Math.random() > 0.7 ? 1 : 0);
+      if (progress > 0.5 && Math.random() > 0.6) {
+        state.particles.spawn(x, x > 0 ? 'right' : 'left', 1);
       }
 
       const nextCard = topCard.nextElementSibling;
       if (nextCard && nextCard.classList.contains('tinder-card')) {
-        const scale = 0.92 + (opacity * 0.08);
-        const blur = 4 - (opacity * 4);
-        const y = 30 - (opacity * 30);
-        gsap.set(nextCard, { scale: scale, filter: `blur(${blur}px)`, y: y, opacity: 0.4 + (opacity * 0.6) });
+        gsap.set(nextCard, {
+          scale: 0.92 + (progress * 0.08),
+          filter: `blur(${4 - (progress * 4)}px)`,
+          y: 30 - (progress * 30),
+          opacity: 0.4 + (progress * 0.6)
+        });
       }
-      gsap.to(topCard, { rotation: x * 0.05, duration: 0 });
+      gsap.set(topCard, { rotation: x * 0.05 });
     },
     onDragEnd: function () {
       const x = this.x;
       state.dragDistX = 0;
-      if (Math.abs(x) > 100) {
+      if (Math.abs(x) > 120) {
         swipe(x > 0 ? 'right' : 'left');
       } else {
-        gsap.to(topCard, { x: 0, y: 0, rotation: 0, duration: 0.2, ease: 'power3.out' });
-        gsap.to('.swipe-indicator', { opacity: 0, duration: 0.1 });
-        gsap.to('.swipe-aura', { opacity: 0, duration: 0.1 });
+        gsap.to(topCard, { x: 0, y: 0, rotation: 0, duration: 0.3, ease: 'back.out(1.7)' });
+        gsap.to(['.swipe-indicator', '.swipe-aura'], { opacity: 0, duration: 0.2 });
         const nextCard = topCard.nextElementSibling;
         if (nextCard && nextCard.classList.contains('tinder-card')) {
-          gsap.to(nextCard, { scale: 0.92, filter: 'blur(4px)', y: 30, opacity: 0.4, duration: 0.2 });
+          gsap.to(nextCard, { scale: 0.92, filter: 'blur(4px)', y: 30, opacity: 0.4, duration: 0.3 });
         }
       }
     }
@@ -312,33 +283,29 @@ function swipe(direction) {
   state.isAnimating = true;
 
   const card = state.cards[state.currentIndex];
-  const xTarget = direction === 'right' ? 1000 : -1000;
-
   state.results.push({
     image: state.currentProject.images[state.currentIndex],
     liked: direction === 'right'
   });
 
+  state.particles.spawn(0, direction, 15);
+
   gsap.to(card, {
-    x: xTarget,
-    y: direction === 'right' ? -200 : 200,
-    rotation: direction === 'right' ? 45 : -45,
-    duration: 0.25,
-    ease: 'power3.in',
-    onStart: () => {
-      state.particles.spawn(0, direction, 12);
-    },
+    x: direction === 'right' ? 1000 : -1000,
+    y: direction === 'right' ? -100 : 100,
+    rotation: direction === 'right' ? 40 : -40,
+    duration: 0.4,
+    ease: 'power2.in',
     onComplete: () => {
       card.remove();
       state.currentIndex++;
       state.isAnimating = false;
-      gsap.set('.swipe-indicator', { opacity: 0 });
-      gsap.set('.swipe-aura', { opacity: 0 });
+      gsap.set(['.swipe-indicator', '.swipe-aura'], { opacity: 0 });
       updateProgress();
       const nextCard = document.querySelector('.tinder-card');
       if (nextCard) {
         nextCard.classList.remove('bg-stack');
-        gsap.to(nextCard, { scale: 1, filter: 'blur(0px)', y: 0, opacity: 1, duration: 0.2, ease: 'power3.out' });
+        gsap.to(nextCard, { scale: 1, filter: 'blur(0px)', y: 0, opacity: 1, duration: 0.4, ease: 'power3.out' });
         setupDraggable();
       } else {
         finishProject();
@@ -349,10 +316,9 @@ function swipe(direction) {
 
 function updateProgress() {
   const total = state.currentProject.images.length;
-  const current = Math.min(state.currentIndex + 1, total);
   const prog = (state.currentIndex / total) * 100;
-  document.getElementById('progress-bar').style.width = `${prog}%`;
-  document.getElementById('image-counter').innerText = `${current} / ${total}`;
+  gsap.to('#progress-bar', { width: `${prog}%`, duration: 0.5, ease: 'power2.out' });
+  document.getElementById('image-counter').innerText = `${Math.min(state.currentIndex + 1, total)} / ${total}`;
 }
 
 async function finishProject() {
@@ -360,8 +326,7 @@ async function finishProject() {
   showView('success');
 }
 
-// Controls
-document.getElementById('ctrl-like').addEventListener('click', () => swipe('right'));
-document.getElementById('ctrl-dislike').addEventListener('click', () => swipe('left'));
+document.getElementById('ctrl-like').onclick = () => swipe('right');
+document.getElementById('ctrl-dislike').onclick = () => swipe('left');
 
 init();
