@@ -244,7 +244,7 @@ async function renderResults() {
                     <span style="color:#ff006e;">✗ ${notLiked} Non piace</span>
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:6px;">
-                    ${liked.map(r => `<img src="${r.image}" style="width:50px; height:50px; object-fit:cover; border-radius:10px; border:1px solid rgba(0,255,163,0.4);" />`).join('')}
+                    ${liked.map(r => `<img src="${r.image}" onclick="openLightbox('${r.image.replace(/'/g, "\\'")}')" style="width:50px; height:50px; object-fit:cover; border-radius:10px; border:1px solid rgba(0,255,163,0.4); cursor:pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" />`).join('')}
                 </div>
             </div>
         `;
