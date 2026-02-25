@@ -196,6 +196,30 @@ const AdminData = {
             return null;
         }
     },
+    async getGitHubImages(projectId) {
+        const config = JSON.parse(localStorage.getItem('moorph_gh_config') || '{}');
+        if (!config.token || !config.owner || !config.repo) return null;
+
+        try {
+            const path = `public/projects/${projectId}`;
+            const resp = await fetch(`https://api.github.com/repos/${config.owner}/${config.repo}/contents/${path}`, {
+                headers: { 'Authorization': `token ${config.token}` }
+            });
+
+            if (!resp.ok) return null;
+
+            const data = await resp.json();
+            if (Array.isArray(data)) {
+                return data
+                    .filter(file => /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file.name))
+                    .map(file => `/projects/${projectId}/${file.name}`);
+            }
+            return null;
+        } catch (e) {
+            console.error('Errore recupero immagini da GitHub:', e);
+            return null;
+        }
+    },
     async deleteFromGitHub(projectId, url) {
         const config = JSON.parse(localStorage.getItem('moorph_gh_config') || '{}');
         if (!config.token || !config.owner || !config.repo) return;
@@ -265,14 +289,20 @@ window.selectProject = async (id) => {
     activeProject = projects.find(p => p.id === id);
     if (!activeProject) return;
 
-    // Fetch images from sub-collection (NO LONGER FROM FIREBASE)
-    // Try to load from local directory/github config
+    // Fetch images: Source of Truth
+    // 1. Try local folder (Local Dev)
     const localData = await AdminData.getLocalImages(id);
+
     if (localData && localData.images) {
         activeProject.images = localData.images;
     } else {
-        // Fallback or keep current if we have them cached in the object
-        activeProject.images = activeProject.images || [];
+        // 2. Try GitHub (Online Admin)
+        const ghImages = await AdminData.getGitHubImages(id);
+        if (ghImages) {
+            activeProject.images = ghImages;
+        } else {
+            activeProject.images = activeProject.images || [];
+        }
     }
 
     el.emptyState.classList.add('hidden');
@@ -550,17 +580,25 @@ function setupEventListeners() {
         btn.disabled = true;
 
         try {
-            const data = await AdminData.getLocalImages(activeProject.id);
-            if (data && data.images) {
-                // Perform a "Mirror" sync: the local folder IS the source of truth
-                activeProject.images = data.images;
+            // 1. Try Local Sync
+            const local = await AdminData.getLocalImages(activeProject.id);
+            if (local && local.images) {
+                activeProject.images = local.images;
                 await updateActiveProject();
-                alert(`Sincronizzazione completata! Trovate ${data.images.length} immagini.`);
+                alert(`Sincronizzazione locale completata! Trovate ${local.images.length} immagini.`);
             } else {
-                alert('Impossibile accedere alla cartella locale.');
+                // 2. Try GitHub Sync (if local fails, we might be online)
+                const ghImages = await AdminData.getGitHubImages(activeProject.id);
+                if (ghImages) {
+                    activeProject.images = ghImages;
+                    await updateActiveProject();
+                    alert(`Sincronizzazione GitHub completata! Trovate ${ghImages.length} immagini.`);
+                } else {
+                    alert('Impossibile accedere alla cartella locale o a GitHub.\nVerifica la configurazione nelle impostazioni.');
+                }
             }
         } catch (e) {
-            alert('Errore durante la sincronizzazione locale.');
+            alert('Errore durante la sincronizzazione.');
         } finally {
             btn.innerText = '🛸 Sincronizza Cartella';
             btn.disabled = false;
