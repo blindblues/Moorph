@@ -142,7 +142,8 @@ window.selectProject = async (id) => {
 
     document.getElementById('detail-name').innerText = activeProject.name;
     document.getElementById('detail-id').innerText = activeProject.id;
-    document.getElementById('edit-password').value = activeProject.password || '';
+    const passInput = document.getElementById('edit-password');
+    passInput.value = activeProject.password || '';
     document.getElementById('image-count').innerText = `${activeProject.images.length} immagini`;
 
     const shortUrl = `${window.location.origin}/?s=${activeProject.id}`;
@@ -226,7 +227,7 @@ async function renderResults() {
             <div class="result-card" id="submission-${submission.id}">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:12px;">
                     <div>
-                        <strong style="font-size:1.1rem;">👤 Utente ${allSubmissions.length - sIdx}</strong>
+                        <strong style="font-size:1.1rem;">👤 ${submission.userName || 'Utente Anonimo'}</strong>
                         <div style="font-size:0.85rem; color:var(--text-dim); margin-top:4px;">${date}</div>
                     </div>
                     <button onclick="deleteSubmission('${submission.id}')" class="btn-small" style="background:rgba(255,0,110,0.1); border-color:rgba(255,0,110,0.2); color:#ff4d94; padding:8px 12px; font-size:0.75rem;">
@@ -399,6 +400,19 @@ function setupEventListeners() {
         selectedImages.clear();
         updateBulkBar();
         await updateActiveProject();
+    });
+
+    // --- PASSWORD UPDATE ---
+    const passInput = document.getElementById('edit-password');
+    passInput.addEventListener('change', async () => {
+        if (!activeProject) return;
+        const newPass = passInput.value.trim();
+        if (!newPass) return alert('La password non può essere vuota');
+        activeProject.password = newPass;
+        await updateActiveProject();
+        // Feedback visivo temporaneo
+        passInput.style.borderColor = 'var(--primary)';
+        setTimeout(() => passInput.style.borderColor = '', 1000);
     });
 }
 

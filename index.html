@@ -31,11 +31,12 @@
         <h1>Benvenuto</h1>
         <p>Inserisci la password del progetto per iniziare.</p>
         <div class="input-group">
-          <input type="password" id="project-password" placeholder="Password" autofocus />
-          <button id="btn-login" class="btn-primary">Accedi ora</button>
+          <input type="text" id="user-name" placeholder="Il tuo Nome" style="margin-bottom: 12px; width: 100%;" />
+          <input type="password" id="project-password" placeholder="Password Progetto" style="width: 100%;" />
+          <button id="btn-login" class="btn-primary" style="margin-top: 12px; width: 100%;">Accedi ora</button>
         </div>
-        <p id="password-error" class="error-text hidden" style="color: var(--accent); font-size: 0.9rem;">Password non
-          valida. Riprova.</p>
+        <p id="login-error" class="error-text hidden"
+          style="color: var(--accent); font-size: 0.9rem; margin-top: 10px;"></p>
       </div>
     </div>
 

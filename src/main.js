@@ -20,10 +20,11 @@ const DataManager = {
       return null;
     }
   },
-  async saveResult(projectId, results) {
+  async saveResult(projectId, userName, results) {
     try {
       await addDoc(collection(db, 'results'), {
         projectId,
+        userName,
         timestamp: new Date().toISOString(),
         data: results
       });
@@ -42,7 +43,8 @@ const state = {
   isAnimating: false,
   particles: null,
   dragDistX: 0,
-  tutorialStep: 1
+  tutorialStep: 1,
+  userName: ''
 };
 
 // Optimized Particle System using GSAP Ticker
@@ -173,8 +175,18 @@ function showView(id) {
 
 // Auth
 document.getElementById('btn-login').onclick = () => {
+  const name = document.getElementById('user-name').value.trim();
   const pass = document.getElementById('project-password').value;
+  const errorEl = document.getElementById('login-error');
+
+  if (!name) {
+    errorEl.innerText = 'Inserisci il tuo nome per continuare.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
   if (pass === state.currentProject.password) {
+    state.userName = name;
     state.tutorialStep = 1;
     document.getElementById('tutorial-p1').classList.remove('hidden');
     gsap.set('#tutorial-p1', { opacity: 1 });
@@ -182,7 +194,8 @@ document.getElementById('btn-login').onclick = () => {
     document.getElementById('btn-next-step').innerText = 'Continua';
     showView('tutorial');
   } else {
-    document.getElementById('password-error').classList.remove('hidden');
+    errorEl.innerText = 'Password non valida. Riprova.';
+    errorEl.classList.remove('hidden');
   }
 };
 
@@ -411,7 +424,7 @@ function updateProgress() {
 }
 
 async function finishProject() {
-  await DataManager.saveResult(state.currentProject.id, state.results);
+  await DataManager.saveResult(state.currentProject.id, state.userName, state.results);
   showView('success');
 }
 
