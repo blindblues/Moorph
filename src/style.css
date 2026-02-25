@@ -142,6 +142,30 @@ p {
   line-height: 1.6;
 }
 
+.tutorial-tips {
+  text-align: left;
+  animation: fadeIn 0.8s ease backwards;
+  animation-delay: 0.3s;
+}
+
+.tip-item {
+  margin-bottom: 12px;
+}
+
+.tip-item b {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--text-white);
+  margin-bottom: 2px;
+  letter-spacing: 0.05em;
+}
+
+.tip-item p {
+  font-size: 0.85rem;
+  margin: 0;
+  line-height: 1.4;
+}
+
 /* Buttons */
 .btn-primary {
   background: linear-gradient(135deg, var(--primary), var(--secondary));
